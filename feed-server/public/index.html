@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>喂奶记录</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <section class="panel">
+        <header class="panel-header">
+          <div class="title-block">
+            <h1>喂奶记录</h1>
+            <p class="elapsed">距上次喂奶已过：<span id="elapsedTime">暂无记录</span></p>
+          </div>
+          <button id="feedBtn" type="button">喂奶</button>
+        </header>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>开始时间</th>
+                <th>结束时间</th>
+                <th>持续时间</th>
+              </tr>
+            </thead>
+            <tbody id="recordsBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>
