@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <GxEPD2_3C.h>
-#include <Fonts/FreeMonoBold24pt7b.h>
+#include <U8g2_for_Adafruit_GFX.h>
 
 static constexpr uint8_t EPD_SCK_PIN = 12;
 static constexpr uint8_t EPD_MOSI_PIN = 13;
@@ -15,10 +15,12 @@ GxEPD2_3C<GxEPD2_420c, GxEPD2_420c::HEIGHT> display(
   GxEPD2_420c(EPD_CS_PIN, EPD_DC_PIN, EPD_RST_PIN, EPD_BUSY_PIN)
 );
 
+U8G2_FOR_ADAFRUIT_GFX u8g2Fonts;
+
 void setup() {
   Serial.begin(115200);
 
-  // Match SPI pins from DEV_Config.h: SCK=12, MOSI=13, CS=10
+  // SPI uses the pin mapping defined above.
   SPI.begin(EPD_SCK_PIN, -1, EPD_MOSI_PIN, EPD_CS_PIN);
   display.epd2.selectSPI(SPI, SPISettings(4000000, MSBFIRST, SPI_MODE0));
 
@@ -26,22 +28,24 @@ void setup() {
   display.setRotation(0);
   display.setFullWindow();
 
-  const char* text = "test";
-  int16_t tbx, tby;
-  uint16_t tbw, tbh;
+  u8g2Fonts.begin(display);
+  u8g2Fonts.setFontMode(1);
+  u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+  u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
+  u8g2Fonts.setFont(u8g2_font_unifont_t_chinese2);
 
-  display.setFont(&FreeMonoBold24pt7b);
-  display.getTextBounds(text, 0, 0, &tbx, &tby, &tbw, &tbh);
+  const char* text = "愚蠢的小秦";
+  const int16_t textWidth = u8g2Fonts.getUTF8Width(text);
+  const int16_t textHeight = u8g2Fonts.getFontAscent() - u8g2Fonts.getFontDescent();
 
-  const int16_t x = (display.width() - tbw) / 2 - tbx;
-  const int16_t y = (display.height() - tbh) / 2 - tby;
+  const int16_t x = (display.width() - textWidth) / 2;
+  const int16_t y = (display.height() + textHeight) / 2;
 
   display.firstPage();
   do {
     display.fillScreen(GxEPD_WHITE);
-    display.setTextColor(GxEPD_BLACK);
-    display.setCursor(x, y);
-    display.print(text);
+    u8g2Fonts.setCursor(x, y);
+    u8g2Fonts.print(text);
   } while (display.nextPage());
 
   display.hibernate();
