@@ -1,18 +1,21 @@
 #include <Arduino.h>
 
-// put function declarations here:
-int myFunction(int, int);
+unsigned long msgCount = 0;
 
 void setup() {
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
+  Serial.begin(115200);
+  unsigned long start = millis();
+  while (!Serial && (millis() - start) < 5000) {
+    delay(10);
+  }
+  Serial.println("ESP32-S3 serial test start");
+  Serial.println("If you cannot see this, check monitor baud = 115200 and press RST.");
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-}
-
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
+  Serial.print("Test message #");
+  Serial.print(msgCount++);
+  Serial.print(" | Uptime(ms): ");
+  Serial.println(millis());
+  delay(1000);
 }
