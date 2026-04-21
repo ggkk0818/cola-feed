@@ -94,8 +94,159 @@ tbody tr:last-child td {
   color: #6b7280;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 767px) {
+  .container {
+    margin: 12px auto;
+    padding: 0 12px;
+  }
+
+  .panel {
+    border-radius: 10px;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+  }
+
+  .panel-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 14px;
+  }
+
   .panel-header h1 {
     font-size: 18px;
+  }
+
+  .elapsed {
+    margin-top: 4px;
+    font-size: 12px;
+  }
+
+  #feedBtn {
+    width: 100%;
+    min-height: 42px;
+    font-size: 15px;
+  }
+
+  .table-wrap {
+    overflow: visible;
+    padding: 8px 12px 12px;
+  }
+
+  table,
+  thead,
+  tbody,
+  tr,
+  th,
+  td {
+    display: block;
+    width: 100%;
+  }
+
+  thead {
+    display: none;
+  }
+
+  tbody tr {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+
+  tbody tr:last-child {
+    margin-bottom: 0;
+  }
+
+  td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    white-space: normal;
+    border-bottom: 1px dashed var(--line);
+  }
+
+  td::before {
+    flex-shrink: 0;
+    font-weight: 600;
+    color: #6b7280;
+  }
+
+  td:nth-child(1)::before {
+    content: 'ID';
+  }
+
+  td:nth-child(2)::before {
+    content: '开始时间';
+  }
+
+  td:nth-child(3)::before {
+    content: '结束时间';
+  }
+
+  td:nth-child(4)::before {
+    content: '持续时间';
+  }
+
+  td.empty {
+    justify-content: center;
+    text-align: center;
+    border-bottom: none;
+  }
+
+  td.empty::before {
+    content: '';
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .container {
+    max-width: 900px;
+    margin: 22px auto;
+    padding: 0 20px;
+  }
+
+  .panel-header {
+    padding: 16px 18px;
+  }
+
+  .panel-header h1 {
+    font-size: 20px;
+  }
+
+  #feedBtn {
+    min-width: 96px;
+  }
+
+  th,
+  td {
+    padding: 11px 12px;
+    font-size: 13px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container {
+    max-width: 1180px;
+    margin: 36px auto;
+    padding: 0 24px;
+  }
+
+  .panel-header {
+    padding: 18px 24px;
+  }
+
+  .panel-header h1 {
+    font-size: 24px;
+  }
+
+  .elapsed {
+    font-size: 14px;
+  }
+
+  th,
+  td {
+    font-size: 15px;
   }
 }
