@@ -26,14 +26,6 @@ void setup() {
     connected = wifiModule.connectConfigured(15000);
   }
 
-  FeedRecord mockFeedRecord;
-  mockFeedRecord.id = "0123456789abcdef0123456789abcdef";
-  mockFeedRecord.startTime = "2026-04-22 09:20:00";
-  mockFeedRecord.endTime = "2026-04-22 09:40:00";
-  mockFeedRecord.duration = 20L * 60L;
-  feedController.pushFeedData(mockFeedRecord);
-  feedController.setServerTime("2026-04-22 10:05:00");
-
   if (connected) {
     webServerModule.begin(networkModule, feedController, drawingModule, wifiModule);
     feedController.renderFeedScreenIfNeeded(drawingModule, true, wifiModule.localIp());

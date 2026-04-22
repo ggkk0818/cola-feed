@@ -286,7 +286,7 @@ void DrawingModule::renderFeedScreen(bool wifiConnected, const String& localIp,
     fonts_.setCursor(titleX, titleBaselineY);
     fonts_.print(titleText);
 
-    if (!lastFeedDiffTimeStr.isEmpty()) {
+    if (hasLatestFeedData && !lastFeedDiffTimeStr.isEmpty()) {
       fonts_.setFont(u8g2_font_logisoso58_tr);
       const int16_t mainWidth = fonts_.getUTF8Width(lastFeedDiffTimeStr.c_str());
       const int16_t mainAscent = fonts_.getFontAscent();

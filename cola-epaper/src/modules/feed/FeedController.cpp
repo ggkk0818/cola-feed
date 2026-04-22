@@ -236,7 +236,7 @@ bool FeedController::parseDateTimeToEpoch(const String& dateTime, time_t& outEpo
 
 String FeedController::formatDiffTime(long diffSeconds) {
   if (diffSeconds < 5L * 60L) {
-    return "Now";
+    return "NOW";
   }
 
   if (diffSeconds < 60L * 60L) {
