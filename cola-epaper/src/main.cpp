@@ -1,9 +1,11 @@
 #include <Arduino.h>
 
 #include "modules/drawing/DrawingModule.h"
+#include "modules/feed/FeedController.h"
 #include "modules/wifi/WifiModule.h"
 
 DrawingModule drawingModule;
+FeedController feedController;
 WifiModule wifiModule;
 
 void setup() {
@@ -20,15 +22,25 @@ void setup() {
     connected = wifiModule.connectConfigured(15000);
   }
 
+  FeedRecord mockFeedRecord;
+  mockFeedRecord.id = "0123456789abcdef0123456789abcdef";
+  mockFeedRecord.startTime = "2026-04-22 09:20:00";
+  mockFeedRecord.endTime = "2026-04-22 09:40:00";
+  mockFeedRecord.duration = 20L * 60L;
+  feedController.pushFeedData(mockFeedRecord);
+  feedController.setServerTime("2026-04-22 10:05:00");
+
   if (connected) {
-    // TODO: implement post-connection workflow.
+    feedController.renderFeedScreenIfNeeded(drawingModule, true, wifiModule.localIp());
   } else {
     drawingModule.renderNoNetwork();
   }
-
-  drawingModule.hibernate();
 }
 
 void loop() {
+  const bool wifiConnected = wifiModule.isConnected();
+  const String localIp = wifiConnected ? wifiModule.localIp() : String("");
+  feedController.renderFeedScreenIfNeeded(drawingModule, wifiConnected, localIp);
+
   delay(1000);
 }

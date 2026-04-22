@@ -15,6 +15,9 @@ class DrawingModule {
   void renderLogo();
   void renderNoNetwork();
   void renderWifiList(const std::vector<String>& ssidList);
+  void renderFeedScreen(bool wifiConnected, const String& localIp,
+                        const String& lastFeedDiffTimeStr, bool hasLatestFeedData,
+                        const String& latestFeedEndTime);
   void renderImage(const ImageData& image, int16_t x = 0, int16_t y = 0);
   void hibernate();
 
