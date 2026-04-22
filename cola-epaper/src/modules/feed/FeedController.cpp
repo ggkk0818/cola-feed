@@ -236,19 +236,19 @@ bool FeedController::parseDateTimeToEpoch(const String& dateTime, time_t& outEpo
 
 String FeedController::formatDiffTime(long diffSeconds) {
   if (diffSeconds < 5L * 60L) {
-    return "刚刚";
+    return "Now";
   }
 
   if (diffSeconds < 60L * 60L) {
     const long minutes = diffSeconds / 60L;
-    return String(minutes) + "分钟";
+    return String(minutes) + "M";
   }
 
   const long hours = diffSeconds / (60L * 60L);
   const long minutes = (diffSeconds % (60L * 60L)) / 60L;
   if (minutes == 0) {
-    return String(hours) + "小时";
+    return String(hours) + "H";
   }
 
-  return String(hours) + "小时" + String(minutes) + "分钟";
+  return String(hours) + "H" + String(minutes) + "M";
 }

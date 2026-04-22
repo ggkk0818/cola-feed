@@ -147,6 +147,9 @@ void DrawingModule::renderLogo() {
   const int16_t centerY = display_.height() / 2;
   const int16_t outerRadius = 56;
   const int16_t innerRadius = 50;
+  const char* logoText = "ColaFeed";
+  const String logoTextStr(logoText);
+  const int16_t logoTextCenterY = centerY + 86;
 
   const ImageData& logoImage = ImageData::logoImage64x64();
   const int16_t imageX = centerX - static_cast<int16_t>(logoImage.width() / 2);
@@ -159,7 +162,27 @@ void DrawingModule::renderLogo() {
     display_.fillCircle(centerX, centerY, innerRadius, GxEPD_WHITE);
     display_.drawBitmap(imageX, imageY, logoImage.bitmapData(), logoImage.width(), logoImage.height(),
                         GxEPD_RED);
+
+    fonts_.setFont(u8g2_font_logisoso32_tf);
+    const int16_t largeFontAscent = fonts_.getFontAscent();
+    const int16_t largeFontDescent = fonts_.getFontDescent();
+    const int16_t largeTextWidth = fonts_.getUTF8Width(logoText);
+    const int16_t largeTextHeight = largeFontAscent - largeFontDescent;
+    const bool canUseLargeFont =
+        (largeTextWidth > 0) && (largeTextHeight > 0) && (largeTextWidth <= display_.width());
+
+    if (canUseLargeFont) {
+      const int16_t textX = centerX - (largeTextWidth / 2);
+      const int16_t textBaselineY = logoTextCenterY + ((largeFontAscent + largeFontDescent) / 2);
+      fonts_.setCursor(textX, textBaselineY);
+      fonts_.print(logoText);
+    } else {
+      fonts_.setFont(u8g2_font_wqy16_t_gb2312);
+      drawCenterText3x(display_, fonts_, logoTextStr, centerX, logoTextCenterY);
+    }
   } while (display_.nextPage());
+
+  fonts_.setFont(u8g2_font_wqy16_t_gb2312);
 
   hibernate();
 }
@@ -218,6 +241,8 @@ void DrawingModule::renderWifiList(const std::vector<String>& ssidList) {
 void DrawingModule::renderFeedScreen(bool wifiConnected, const String& localIp,
                                      const String& lastFeedDiffTimeStr, bool hasLatestFeedData,
                                      const String& latestFeedEndTime) {
+  fonts_.setFont(u8g2_font_wqy16_t_gb2312);
+
   const int16_t centerX = display_.width() / 2;
   const int16_t centerY = display_.height() / 2;
 
@@ -261,7 +286,19 @@ void DrawingModule::renderFeedScreen(bool wifiConnected, const String& localIp,
     fonts_.setCursor(titleX, titleBaselineY);
     fonts_.print(titleText);
 
-    drawCenterText3x(display_, fonts_, mainText, centerX, centerY);
+    if (!lastFeedDiffTimeStr.isEmpty()) {
+      fonts_.setFont(u8g2_font_logisoso58_tr);
+      const int16_t mainWidth = fonts_.getUTF8Width(lastFeedDiffTimeStr.c_str());
+      const int16_t mainAscent = fonts_.getFontAscent();
+      const int16_t mainDescent = fonts_.getFontDescent();
+      const int16_t mainX = centerX - (mainWidth / 2);
+      const int16_t mainBaselineY = centerY + ((mainAscent + mainDescent) / 2);
+      fonts_.setCursor(mainX, mainBaselineY);
+      fonts_.print(lastFeedDiffTimeStr);
+      fonts_.setFont(u8g2_font_wqy16_t_gb2312);
+    } else {
+      drawCenterText3x(display_, fonts_, mainText, centerX, centerY);
+    }
 
     if (hasLatestFeedData && !latestFeedEndTime.isEmpty()) {
       fonts_.setCursor(latestX, latestBaselineY);
