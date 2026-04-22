@@ -122,6 +122,8 @@ void DrawingModule::renderLogo() {
     display_.drawBitmap(imageX, imageY, logoImage.bitmapData(), logoImage.width(), logoImage.height(),
                         GxEPD_RED);
   } while (display_.nextPage());
+
+  hibernate();
 }
 
 void DrawingModule::renderNoNetwork() {
@@ -146,6 +148,8 @@ void DrawingModule::renderNoNetwork() {
     fonts_.setCursor(textX, textBaselineY);
     fonts_.print(noNetworkText);
   } while (display_.nextPage());
+
+  hibernate();
 }
 
 void DrawingModule::renderWifiList(const std::vector<String>& ssidList) {
@@ -169,6 +173,8 @@ void DrawingModule::renderWifiList(const std::vector<String>& ssidList) {
       y += lineHeight;
     }
   } while (display_.nextPage());
+
+  hibernate();
 }
 
 void DrawingModule::renderFeedScreen(bool wifiConnected, const String& localIp,
@@ -224,6 +230,8 @@ void DrawingModule::renderFeedScreen(bool wifiConnected, const String& localIp,
       fonts_.print(latestFeedEndTime);
     }
   } while (display_.nextPage());
+
+  hibernate();
 }
 
 void DrawingModule::renderImage(const ImageData& image, int16_t x, int16_t y) {
@@ -236,6 +244,8 @@ void DrawingModule::renderImage(const ImageData& image, int16_t x, int16_t y) {
     display_.fillScreen(GxEPD_WHITE);
     display_.drawBitmap(x, y, image.bitmapData(), image.width(), image.height(), GxEPD_BLACK);
   } while (display_.nextPage());
+
+  hibernate();
 }
 
 void DrawingModule::hibernate() {
