@@ -9,26 +9,56 @@
   <body>
     <main class="container">
       <section class="panel">
-        <header class="panel-header">
-          <div class="title-block">
-            <h1>喂奶记录</h1>
-            <p class="elapsed">距上次喂奶已过：<span id="elapsedTime">暂无记录</span></p>
-          </div>
-          <button id="feedBtn" type="button">喂奶</button>
-        </header>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>开始时间</th>
-                <th>结束时间</th>
-                <th>持续时间</th>
-              </tr>
-            </thead>
-            <tbody id="recordsBody"></tbody>
-          </table>
+        <div class="tabs">
+          <button id="tabOverviewBtn" class="tab-btn active" type="button">概览</button>
+          <button id="tabClientsBtn" class="tab-btn" type="button">客户端</button>
         </div>
+
+        <section id="overviewPane" class="tab-pane active" aria-label="概览">
+          <header class="panel-header">
+            <div class="title-block">
+              <h1>喂奶记录</h1>
+              <p class="elapsed">距上次喂奶已过：<span id="elapsedTime">暂无记录</span></p>
+            </div>
+            <button id="feedBtn" type="button">喂奶</button>
+          </header>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>开始时间</th>
+                  <th>结束时间</th>
+                  <th>持续时间</th>
+                </tr>
+              </thead>
+              <tbody id="recordsBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="clientsPane" class="tab-pane" aria-label="客户端列表">
+          <header class="panel-header">
+            <div class="title-block">
+              <h1>客户端列表</h1>
+              <p class="elapsed">通过UDP广播自动发现在线客户端</p>
+            </div>
+          </header>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>chipId</th>
+                  <th>IP</th>
+                  <th>心跳时间</th>
+                  <th>更新时间</th>
+                  <th>状态</th>
+                </tr>
+              </thead>
+              <tbody id="clientsBody"></tbody>
+            </table>
+          </div>
+        </section>
       </section>
     </main>
     <script src="/app.js"></script>

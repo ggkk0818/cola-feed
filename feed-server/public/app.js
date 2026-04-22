@@ -1,6 +1,12 @@
 const recordsBody = document.getElementById('recordsBody');
+const clientsBody = document.getElementById('clientsBody');
 const feedBtn = document.getElementById('feedBtn');
 const elapsedTime = document.getElementById('elapsedTime');
+const tabOverviewBtn = document.getElementById('tabOverviewBtn');
+const tabClientsBtn = document.getElementById('tabClientsBtn');
+const overviewPane = document.getElementById('overviewPane');
+const clientsPane = document.getElementById('clientsPane');
+
 let lastFeedEndMs = null;
 
 function padTwoDigits(value) {
@@ -119,16 +125,39 @@ function renderRows(records) {
     .map(
       (record) => `
         <tr>
-          <td>${record.id || '-'}</td>
-          <td>${formatDateTime(record.startTime)}</td>
-          <td>${formatDateTime(record.endTime)}</td>
-          <td>${formatDuration(record.duration)}</td>
+          <td data-label="ID">${record.id || '-'}</td>
+          <td data-label="开始时间">${formatDateTime(record.startTime)}</td>
+          <td data-label="结束时间">${formatDateTime(record.endTime)}</td>
+          <td data-label="持续时间">${formatDuration(record.duration)}</td>
         </tr>
       `
     )
     .join('');
 
   recordsBody.innerHTML = rows;
+}
+
+function renderClientRows(clients) {
+  if (!Array.isArray(clients) || clients.length === 0) {
+    clientsBody.innerHTML = '<tr><td colspan="5" class="empty">暂无客户端数据</td></tr>';
+    return;
+  }
+
+  const rows = clients
+    .map(
+      (client) => `
+        <tr>
+          <td data-label="chipId">${client.chipId || '-'}</td>
+          <td data-label="IP">${client.ip || '-'}</td>
+          <td data-label="心跳时间">${formatDateTime(client.heartbeatTime)}</td>
+          <td data-label="更新时间">${formatDateTime(client.updateTime)}</td>
+          <td data-label="状态">${client.isOnline ? '在线' : '离线'}</td>
+        </tr>
+      `
+    )
+    .join('');
+
+  clientsBody.innerHTML = rows;
 }
 
 function renderElapsed() {
@@ -139,6 +168,14 @@ function renderElapsed() {
 
   const seconds = Math.max(0, Math.floor((Date.now() - lastFeedEndMs) / 1000));
   elapsedTime.textContent = formatElapsedSinceLastFeed(seconds);
+}
+
+function switchTab(tabName) {
+  const isOverview = tabName === 'overview';
+  tabOverviewBtn.classList.toggle('active', isOverview);
+  tabClientsBtn.classList.toggle('active', !isOverview);
+  overviewPane.classList.toggle('active', isOverview);
+  clientsPane.classList.toggle('active', !isOverview);
 }
 
 async function loadStatus() {
@@ -152,19 +189,45 @@ async function loadStatus() {
   renderRows(records);
 }
 
+async function loadClients() {
+  const response = await fetch('/api/clients');
+  const result = await response.json();
+  const clients = result?.data?.clients || [];
+  renderClientRows(clients);
+}
+
+async function refreshAll() {
+  try {
+    await Promise.all([loadStatus(), loadClients()]);
+  } catch (error) {
+    // Keep UI responsive even if network intermittently fails.
+  }
+}
+
 async function feedNow() {
   feedBtn.disabled = true;
   feedBtn.textContent = '处理中...';
 
   try {
     await fetch('/api/feed', { method: 'POST' });
-    await loadStatus();
+    await refreshAll();
   } finally {
     feedBtn.disabled = false;
     feedBtn.textContent = '喂奶';
   }
 }
 
+tabOverviewBtn.addEventListener('click', () => {
+  switchTab('overview');
+});
+
+tabClientsBtn.addEventListener('click', () => {
+  switchTab('clients');
+});
+
 feedBtn.addEventListener('click', feedNow);
+
 setInterval(renderElapsed, 1000);
-loadStatus();
+setInterval(refreshAll, 5000);
+switchTab('overview');
+refreshAll();
