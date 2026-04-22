@@ -16,6 +16,7 @@ class ClientService {
     this.clients = this.loadClients();
     this.udpServer = null;
     this.syncLoopRunning = false;
+    this.syncQueue = Promise.resolve();
 
     this.saveClients();
   }
@@ -167,7 +168,7 @@ class ClientService {
   async runSyncLoop() {
     while (this.syncLoopRunning) {
       try {
-        await this.syncClientsOnce();
+        await this.enqueueSync();
       } catch (error) {
         // eslint-disable-next-line no-console
         console.error('client sync error:', error.message);
@@ -177,7 +178,20 @@ class ClientService {
     }
   }
 
-  async syncClientsOnce() {
+  triggerImmediateSync() {
+    return this.enqueueSync({ force: true });
+  }
+
+  enqueueSync(options = {}) {
+    this.syncQueue = this.syncQueue
+      .catch(() => {})
+      .then(() => this.syncClientsOnce(options));
+
+    return this.syncQueue;
+  }
+
+  async syncClientsOnce(options = {}) {
+    const { force = false } = options;
     const now = new Date();
     const nowMs = now.getTime();
     const nowString = formatDateTime(now);
@@ -193,7 +207,7 @@ class ClientService {
       const updateDate = parseDateTime(client.updateTime);
       const updateTimeMs = updateDate ? updateDate.getTime() : 0;
 
-      if (nowMs - updateTimeMs < 60 * 1000) {
+      if (!force && nowMs - updateTimeMs < 60 * 1000) {
         continue;
       }
 

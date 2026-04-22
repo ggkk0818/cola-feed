@@ -12,6 +12,11 @@ function createApiRouter(options) {
       data: currentRecord,
       messagge: '成功',
     });
+
+    clientService.triggerImmediateSync().catch((error) => {
+      // eslint-disable-next-line no-console
+      console.error('immediate client sync error:', error.message);
+    });
   });
 
   router.get('/status', (req, res) => {
