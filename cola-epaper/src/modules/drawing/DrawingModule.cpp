@@ -58,7 +58,15 @@ static void drawCenterText3x(DisplayType& display, U8G2_FOR_ADAFRUIT_GFX& fonts,
     return;
   }
 
-  GFXcanvas1 textCanvas(textWidth, fontHeight);
+  const int16_t horizontalPadding = 2;
+  const int16_t verticalPadding = 8;
+  const int16_t canvasWidth = textWidth + (horizontalPadding * 2);
+  const int16_t canvasHeight = fontHeight + (verticalPadding * 2);
+  if (canvasWidth <= 0 || canvasHeight <= 0) {
+    return;
+  }
+
+  GFXcanvas1 textCanvas(static_cast<uint16_t>(canvasWidth), static_cast<uint16_t>(canvasHeight));
   textCanvas.fillScreen(0);
 
   U8G2_FOR_ADAFRUIT_GFX canvasFonts;
@@ -67,19 +75,49 @@ static void drawCenterText3x(DisplayType& display, U8G2_FOR_ADAFRUIT_GFX& fonts,
   canvasFonts.setForegroundColor(1);
   canvasFonts.setBackgroundColor(0);
   canvasFonts.setFont(u8g2_font_wqy16_t_gb2312);
-  canvasFonts.setCursor(0, fontAscent);
+  canvasFonts.setCursor(horizontalPadding, verticalPadding + fontAscent);
   canvasFonts.print(text);
 
+  int16_t minX = canvasWidth;
+  int16_t minY = canvasHeight;
+  int16_t maxX = -1;
+  int16_t maxY = -1;
+  for (int16_t yIndex = 0; yIndex < canvasHeight; ++yIndex) {
+    for (int16_t xIndex = 0; xIndex < canvasWidth; ++xIndex) {
+      if (textCanvas.getPixel(xIndex, yIndex) != 0) {
+        if (xIndex < minX) {
+          minX = xIndex;
+        }
+        if (yIndex < minY) {
+          minY = yIndex;
+        }
+        if (xIndex > maxX) {
+          maxX = xIndex;
+        }
+        if (yIndex > maxY) {
+          maxY = yIndex;
+        }
+      }
+    }
+  }
+
+  if (maxX < minX || maxY < minY) {
+    return;
+  }
+
   const int16_t scale = 3;
-  const int16_t scaledWidth = textWidth * scale;
-  const int16_t scaledHeight = fontHeight * scale;
+  const int16_t glyphWidth = (maxX - minX) + 1;
+  const int16_t glyphHeight = (maxY - minY) + 1;
+  const int16_t scaledWidth = glyphWidth * scale;
+  const int16_t scaledHeight = glyphHeight * scale;
   const int16_t drawX = centerX - (scaledWidth / 2);
   const int16_t drawY = centerY - (scaledHeight / 2);
 
-  for (int16_t yIndex = 0; yIndex < fontHeight; ++yIndex) {
-    for (int16_t xIndex = 0; xIndex < textWidth; ++xIndex) {
+  for (int16_t yIndex = minY; yIndex <= maxY; ++yIndex) {
+    for (int16_t xIndex = minX; xIndex <= maxX; ++xIndex) {
       if (textCanvas.getPixel(xIndex, yIndex) != 0) {
-        display.fillRect(drawX + xIndex * scale, drawY + yIndex * scale, scale, scale, GxEPD_BLACK);
+        display.fillRect(drawX + (xIndex - minX) * scale, drawY + (yIndex - minY) * scale, scale,
+                         scale, GxEPD_BLACK);
       }
     }
   }
@@ -183,7 +221,7 @@ void DrawingModule::renderFeedScreen(bool wifiConnected, const String& localIp,
   const int16_t centerX = display_.width() / 2;
   const int16_t centerY = display_.height() / 2;
 
-  const char* titleText = "上次喂奶";
+  const char* titleText = "距离上次喂奶";
   const String mainText = lastFeedDiffTimeStr.isEmpty() ? String("无数据") : lastFeedDiffTimeStr;
 
   const int16_t fontAscent = fonts_.getFontAscent();
