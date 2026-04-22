@@ -1,14 +1,54 @@
 const recordsBody = document.getElementById('recordsBody');
 const feedBtn = document.getElementById('feedBtn');
 const elapsedTime = document.getElementById('elapsedTime');
-let lastFeedStartMs = null;
+let lastFeedEndMs = null;
 
-function formatDateTime(isoTime) {
-  if (!isoTime) {
+function padTwoDigits(value) {
+  return String(value).padStart(2, '0');
+}
+
+function formatDateTimeFromDate(date) {
+  const year = date.getFullYear();
+  const month = padTwoDigits(date.getMonth() + 1);
+  const day = padTwoDigits(date.getDate());
+  const hours = padTwoDigits(date.getHours());
+  const minutes = padTwoDigits(date.getMinutes());
+  const seconds = padTwoDigits(date.getSeconds());
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+function parseDateTime(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalizedMatch = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})\s(\d{2}):(\d{2}):(\d{2})$/
+  );
+  if (normalizedMatch) {
+    const [, y, m, d, h, min, s] = normalizedMatch;
+    const parsed = new Date(
+      Number(y),
+      Number(m) - 1,
+      Number(d),
+      Number(h),
+      Number(min),
+      Number(s)
+    );
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const fallback = new Date(value);
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
+}
+
+function formatDateTime(rawValue) {
+  if (!rawValue) {
     return '-';
   }
-  const date = new Date(isoTime);
-  return date.toLocaleString('zh-CN', { hour12: false });
+
+  const parsed = parseDateTime(rawValue);
+  return parsed ? formatDateTimeFromDate(parsed) : '-';
 }
 
 function formatDuration(seconds) {
@@ -16,6 +56,56 @@ function formatDuration(seconds) {
   const minutes = Math.floor(safe / 60);
   const remain = safe % 60;
   return `${minutes}分${remain}秒`;
+}
+
+function formatElapsedSinceLastFeed(seconds) {
+  const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+
+  if (safe < 5 * 60) {
+    return '刚刚';
+  }
+
+  if (safe < 60 * 60) {
+    const minutes = Math.floor(safe / 60);
+    return `${minutes}分钟`;
+  }
+
+  const hours = Math.floor(safe / (60 * 60));
+  const minutes = Math.floor((safe % (60 * 60)) / 60);
+  if (minutes === 0) {
+    return `${hours}小时`;
+  }
+
+  return `${hours}小时${minutes}分钟`;
+}
+
+function getLatestFeedEndMs(records, lastFeed) {
+  let latestEndMs = null;
+
+  if (Array.isArray(records)) {
+    for (let index = 0; index < records.length; index += 1) {
+      const parsedEnd = parseDateTime(records[index]?.endTime);
+      if (!parsedEnd) {
+        continue;
+      }
+
+      const currentEndMs = parsedEnd.getTime();
+      if (!Number.isFinite(currentEndMs)) {
+        continue;
+      }
+
+      if (latestEndMs === null || currentEndMs > latestEndMs) {
+        latestEndMs = currentEndMs;
+      }
+    }
+  }
+
+  if (latestEndMs !== null) {
+    return latestEndMs;
+  }
+
+  const parsedLastEnd = parseDateTime(lastFeed?.endTime);
+  return parsedLastEnd ? parsedLastEnd.getTime() : null;
 }
 
 function renderRows(records) {
@@ -42,23 +132,24 @@ function renderRows(records) {
 }
 
 function renderElapsed() {
-  if (!lastFeedStartMs || !Number.isFinite(lastFeedStartMs)) {
+  if (!lastFeedEndMs || !Number.isFinite(lastFeedEndMs)) {
     elapsedTime.textContent = '暂无记录';
     return;
   }
 
-  const seconds = Math.max(0, Math.floor((Date.now() - lastFeedStartMs) / 1000));
-  elapsedTime.textContent = formatDuration(seconds);
+  const seconds = Math.max(0, Math.floor((Date.now() - lastFeedEndMs) / 1000));
+  elapsedTime.textContent = formatElapsedSinceLastFeed(seconds);
 }
 
 async function loadStatus() {
   const response = await fetch('/api/status');
   const result = await response.json();
+  const records = result?.data?.records || [];
   const lastFeed = result?.data?.lastFeed || null;
 
-  lastFeedStartMs = lastFeed?.startTime ? new Date(lastFeed.startTime).getTime() : null;
+  lastFeedEndMs = getLatestFeedEndMs(records, lastFeed);
   renderElapsed();
-  renderRows(result?.data?.records || []);
+  renderRows(records);
 }
 
 async function feedNow() {
