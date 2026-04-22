@@ -13,6 +13,7 @@ class DrawingModule {
 
   void begin();
   void renderLogo();
+  void renderNoNetwork();
   void renderWifiList(const std::vector<String>& ssidList);
   void renderImage(const ImageData& image, int16_t x = 0, int16_t y = 0);
   void hibernate();

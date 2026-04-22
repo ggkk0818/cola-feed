@@ -49,6 +49,30 @@ void DrawingModule::renderLogo() {
   } while (display_.nextPage());
 }
 
+void DrawingModule::renderNoNetwork() {
+  const int16_t centerX = display_.width() / 2;
+  const int16_t centerY = display_.height() / 2;
+
+  const ImageData& wifiImage = ImageData::wifiImage32x32();
+  const int16_t iconCenterY = centerY - 32;
+  const int16_t iconX = centerX - static_cast<int16_t>(wifiImage.width() / 2);
+  const int16_t iconY = iconCenterY - static_cast<int16_t>(wifiImage.height() / 2);
+
+  const char* noNetworkText = "无网络";
+  const int16_t textWidth = fonts_.getUTF8Width(noNetworkText);
+  const int16_t textBaselineY = centerY + 20;
+  const int16_t textX = centerX - (textWidth / 2);
+
+  display_.firstPage();
+  do {
+    display_.fillScreen(GxEPD_WHITE);
+    display_.drawBitmap(iconX, iconY, wifiImage.bitmapData(), wifiImage.width(), wifiImage.height(),
+                        GxEPD_BLACK);
+    fonts_.setCursor(textX, textBaselineY);
+    fonts_.print(noNetworkText);
+  } while (display_.nextPage());
+}
+
 void DrawingModule::renderWifiList(const std::vector<String>& ssidList) {
   const int16_t fontAscent = fonts_.getFontAscent();
   const int16_t lineHeight = fontAscent - fonts_.getFontDescent() + 4;
