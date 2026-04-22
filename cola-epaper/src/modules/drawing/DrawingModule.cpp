@@ -29,6 +29,26 @@ void DrawingModule::begin() {
   fonts_.setFont(u8g2_font_wqy16_t_gb2312);
 }
 
+void DrawingModule::renderLogo() {
+  const int16_t centerX = display_.width() / 2;
+  const int16_t centerY = display_.height() / 2;
+  const int16_t outerRadius = 56;
+  const int16_t innerRadius = 50;
+
+  const ImageData& logoImage = ImageData::logoImage64x64();
+  const int16_t imageX = centerX - static_cast<int16_t>(logoImage.width() / 2);
+  const int16_t imageY = centerY - static_cast<int16_t>(logoImage.height() / 2);
+
+  display_.firstPage();
+  do {
+    display_.fillScreen(GxEPD_WHITE);
+    display_.fillCircle(centerX, centerY, outerRadius, GxEPD_RED);
+    display_.fillCircle(centerX, centerY, innerRadius, GxEPD_WHITE);
+    display_.drawBitmap(imageX, imageY, logoImage.bitmapData(), logoImage.width(), logoImage.height(),
+                        GxEPD_RED);
+  } while (display_.nextPage());
+}
+
 void DrawingModule::renderWifiList(const std::vector<String>& ssidList) {
   const int16_t fontAscent = fonts_.getFontAscent();
   const int16_t lineHeight = fontAscent - fonts_.getFontDescent() + 4;
@@ -49,6 +69,18 @@ void DrawingModule::renderWifiList(const std::vector<String>& ssidList) {
       fonts_.print(ssidList[index]);
       y += lineHeight;
     }
+  } while (display_.nextPage());
+}
+
+void DrawingModule::renderImage(const ImageData& image, int16_t x, int16_t y) {
+  if (!image.isValid()) {
+    return;
+  }
+
+  display_.firstPage();
+  do {
+    display_.fillScreen(GxEPD_WHITE);
+    display_.drawBitmap(x, y, image.bitmapData(), image.width(), image.height(), GxEPD_BLACK);
   } while (display_.nextPage());
 }
 

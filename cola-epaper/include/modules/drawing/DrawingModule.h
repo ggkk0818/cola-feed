@@ -5,12 +5,16 @@
 #include <U8g2_for_Adafruit_GFX.h>
 #include <vector>
 
+#include "modules/drawing/ImageData.h"
+
 class DrawingModule {
  public:
   DrawingModule();
 
   void begin();
+  void renderLogo();
   void renderWifiList(const std::vector<String>& ssidList);
+  void renderImage(const ImageData& image, int16_t x = 0, int16_t y = 0);
   void hibernate();
 
  private:

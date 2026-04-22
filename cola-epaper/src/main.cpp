@@ -12,6 +12,8 @@ void setup() {
   Serial.begin(115200);
 
   drawingModule.begin();
+  drawingModule.renderLogo();
+
   wifiModule.begin();
 
   const std::vector<String> scannedSsidList = wifiModule.scanNetworks();
