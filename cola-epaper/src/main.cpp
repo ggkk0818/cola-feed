@@ -2,10 +2,14 @@
 
 #include "modules/drawing/DrawingModule.h"
 #include "modules/feed/FeedController.h"
+#include "modules/network/NetworkModule.h"
+#include "modules/webserver/WebServerModule.h"
 #include "modules/wifi/WifiModule.h"
 
 DrawingModule drawingModule;
 FeedController feedController;
+NetworkModule networkModule;
+WebServerModule webServerModule;
 WifiModule wifiModule;
 
 void setup() {
@@ -31,6 +35,7 @@ void setup() {
   feedController.setServerTime("2026-04-22 10:05:00");
 
   if (connected) {
+    webServerModule.begin(networkModule, feedController, drawingModule, wifiModule);
     feedController.renderFeedScreenIfNeeded(drawingModule, true, wifiModule.localIp());
   } else {
     drawingModule.renderNoNetwork();
@@ -39,6 +44,14 @@ void setup() {
 
 void loop() {
   const bool wifiConnected = wifiModule.isConnected();
+  if (wifiConnected && !webServerModule.isStarted()) {
+    webServerModule.begin(networkModule, feedController, drawingModule, wifiModule);
+  }
+
+  if (webServerModule.isStarted()) {
+    networkModule.handleClient();
+  }
+
   const String localIp = wifiConnected ? wifiModule.localIp() : String("");
   feedController.renderFeedScreenIfNeeded(drawingModule, wifiConnected, localIp);
 

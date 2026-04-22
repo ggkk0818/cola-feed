@@ -108,6 +108,10 @@ void FeedController::updateServerTime() {
   lastBoardTimestampMs_ += elapsedSeconds * 1000UL;
 }
 
+void FeedController::requestRenderNow() {
+  lastFeedRenderTickMs_ = 0;
+}
+
 const std::vector<FeedRecord>& FeedController::feedRecords() const {
   return feedRecords_;
 }

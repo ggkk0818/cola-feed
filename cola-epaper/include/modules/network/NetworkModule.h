@@ -13,6 +13,9 @@ class NetworkModule {
   void beginWebServer();
   void on(const String& uri, HTTPMethod method, WebServer::THandlerFunction handler);
   void onNotFound(WebServer::THandlerFunction handler);
+  bool hasArg(const String& argName);
+  String arg(const String& argName);
+  void send(int code, const String& contentType, const String& content);
   void handleClient();
   bool isWebServerStarted() const;
 

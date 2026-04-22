@@ -21,6 +21,7 @@ class FeedController {
 
   bool setServerTime(const String& serverTimeStr);
   void updateServerTime();
+  void requestRenderNow();
 
   const std::vector<FeedRecord>& feedRecords() const;
   long lastFeedDiffTimeSeconds() const;

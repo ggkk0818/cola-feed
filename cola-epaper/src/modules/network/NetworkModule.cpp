@@ -41,6 +41,18 @@ void NetworkModule::onNotFound(WebServer::THandlerFunction handler) {
   webServer_.onNotFound(handler);
 }
 
+bool NetworkModule::hasArg(const String& argName) {
+  return webServer_.hasArg(argName);
+}
+
+String NetworkModule::arg(const String& argName) {
+  return webServer_.arg(argName);
+}
+
+void NetworkModule::send(int code, const String& contentType, const String& content) {
+  webServer_.send(code, contentType, content);
+}
+
 void NetworkModule::handleClient() {
   if (!webServerStarted_) {
     return;
