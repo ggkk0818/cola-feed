@@ -59,7 +59,7 @@ void WebServerModule::handleFeedDataPut() {
     return;
   }
 
-  DynamicJsonDocument requestDoc(1024U + requestBody.length());
+  JsonDocument requestDoc;
   const DeserializationError parseError = deserializeJson(requestDoc, requestBody);
   if (parseError) {
     sendJsonError(400, "invalid json body");
@@ -128,7 +128,7 @@ void WebServerModule::handleFeedDataPut() {
   const String localIp = wifiConnected ? wifiModule_->localIp() : String("");
   feedController_->renderFeedScreenIfNeeded(*drawingModule_, wifiConnected, localIp);
 
-  DynamicJsonDocument responseDoc(256);
+  JsonDocument responseDoc;
   responseDoc["ok"] = true;
   responseDoc["savedRecords"] = parsedRecords.size();
   responseDoc["serverTime"] = serverTime;
@@ -143,7 +143,7 @@ void WebServerModule::sendJsonError(int statusCode, const char* message) {
     return;
   }
 
-  DynamicJsonDocument errorDoc(192);
+  JsonDocument errorDoc;
   errorDoc["ok"] = false;
   errorDoc["error"] = message;
 

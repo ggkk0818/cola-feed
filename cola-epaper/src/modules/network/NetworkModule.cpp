@@ -1,7 +1,14 @@
 #include "modules/network/NetworkModule.h"
 
+#include <ArduinoJson.h>
+#include <ESP.h>
+
 NetworkModule::NetworkModule()
-    : webServer_(80), webServerStarted_(false) {}
+    : webServer_(80),
+      webServerStarted_(false),
+    discoveryUdpStarted_(false),
+      lastWifiConnectedForDiscovery_(false),
+      lastDiscoveryBroadcastMs_(0) {}
 
 bool NetworkModule::httpGet(const String& url, String& responseBody, int& statusCode, uint32_t timeoutMs) {
   HTTPClient httpClient;
@@ -63,4 +70,43 @@ void NetworkModule::handleClient() {
 
 bool NetworkModule::isWebServerStarted() const {
   return webServerStarted_;
+}
+
+void NetworkModule::handleDiscoveryBroadcast(bool wifiConnected, const String& localIp) {
+  if (!wifiConnected) {
+    lastWifiConnectedForDiscovery_ = false;
+    lastDiscoveryBroadcastMs_ = 0;
+    return;
+  }
+
+  const unsigned long nowMs = millis();
+  const bool firstBroadcastAfterConnected = !lastWifiConnectedForDiscovery_;
+  const bool intervalReached =
+      (nowMs - lastDiscoveryBroadcastMs_) >= kDiscoveryBroadcastIntervalMs;
+  if (!firstBroadcastAfterConnected && !intervalReached) {
+    return;
+  }
+
+  JsonDocument doc;
+  doc["type"] = "discover";
+  doc["chip_id"] = String((uint32_t)ESP.getEfuseMac(), HEX);
+  doc["device_name"] = "Cola-ePaper";
+  doc["ip"] = localIp;
+
+  String payload;
+  serializeJson(doc, payload);
+
+  if (!discoveryUdpStarted_) {
+    discoveryUdpStarted_ = udp_.begin(kDiscoveryBroadcastPort) == 1;
+  }
+  if (!discoveryUdpStarted_) {
+    return;
+  }
+
+  udp_.beginPacket(IPAddress(255, 255, 255, 255), kDiscoveryBroadcastPort);
+  udp_.write(reinterpret_cast<const uint8_t*>(payload.c_str()), payload.length());
+  udp_.endPacket();
+
+  lastWifiConnectedForDiscovery_ = true;
+  lastDiscoveryBroadcastMs_ = nowMs;
 }

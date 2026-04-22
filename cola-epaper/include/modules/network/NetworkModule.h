@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <HTTPClient.h>
+#include <WiFiUdp.h>
 #include <WebServer.h>
 
 class NetworkModule {
@@ -18,8 +19,16 @@ class NetworkModule {
   void send(int code, const String& contentType, const String& content);
   void handleClient();
   bool isWebServerStarted() const;
+  void handleDiscoveryBroadcast(bool wifiConnected, const String& localIp);
 
  private:
+  static constexpr uint16_t kDiscoveryBroadcastPort = 6113;
+  static constexpr unsigned long kDiscoveryBroadcastIntervalMs = 60000UL;
+
+  WiFiUDP udp_;
   WebServer webServer_;
   bool webServerStarted_;
+  bool discoveryUdpStarted_;
+  bool lastWifiConnectedForDiscovery_;
+  unsigned long lastDiscoveryBroadcastMs_;
 };

@@ -53,6 +53,7 @@ void loop() {
   }
 
   const String localIp = wifiConnected ? wifiModule.localIp() : String("");
+  networkModule.handleDiscoveryBroadcast(wifiConnected, localIp);
   feedController.renderFeedScreenIfNeeded(drawingModule, wifiConnected, localIp);
 
   delay(1000);
