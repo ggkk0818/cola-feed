@@ -13,6 +13,7 @@ class ImageData {
   bool isValid() const;
 
   static const ImageData& logoImage64x64();
+  static const ImageData& wifiImage32x32();
 
  private:
   uint16_t width_;
