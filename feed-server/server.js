@@ -6,7 +6,10 @@ const { createApiRouter } = require('./src/routes/apiRoutes');
 
 const app = express();
 const port = process.env.PORT || 3000;
-const dataDir = path.join(__dirname, 'data');
+const udpPort = Number(process.env.UDP_PORT) || 6113;
+const dataDir = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : path.join(__dirname, 'data');
 
 const feedService = new FeedService({
   dataDir,
@@ -16,7 +19,7 @@ const feedService = new FeedService({
 const clientService = new ClientService({
   dataDir,
   feedService,
-  udpPort: 6113,
+  udpPort,
 });
 
 clientService.start();

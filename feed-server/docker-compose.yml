@@ -1,0 +1,18 @@
+services:
+  feed-server:
+    build:
+      context: .
+    container_name: feed-server
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      UDP_PORT: 6113
+      DATA_DIR: /app/data
+    ports:
+      - "3000:3000"
+      - "6113:6113/udp"
+    volumes:
+      - feed_server_data:/app/data
+
+volumes:
+  feed_server_data:
