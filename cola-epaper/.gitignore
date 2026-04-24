@@ -4,9 +4,3 @@
 .vscode/launch.json
 .vscode/ipch
 
-# AI assistant local directories
-.claude/
-.cursor/
-.continue/
-.aider/
-.windsurf/
