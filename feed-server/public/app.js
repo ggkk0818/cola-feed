@@ -28,20 +28,10 @@ function parseDateTime(value) {
     return null;
   }
 
-  const normalizedMatch = value.match(
-    /^(\d{4})-(\d{2})-(\d{2})\s(\d{2}):(\d{2}):(\d{2})$/
-  );
-  if (normalizedMatch) {
-    const [, y, m, d, h, min, s] = normalizedMatch;
-    const parsed = new Date(
-      Number(y),
-      Number(m) - 1,
-      Number(d),
-      Number(h),
-      Number(min),
-      Number(s)
-    );
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  const normalized = value.trim().replace(/-/g, '/');
+  const parsed = new Date(normalized);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed;
   }
 
   const fallback = new Date(value);

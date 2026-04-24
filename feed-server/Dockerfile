@@ -2,6 +2,11 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+ENV TZ=Asia/Shanghai
+RUN apk add --no-cache tzdata \
+	&& ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+	&& echo $TZ > /etc/timezone
+
 COPY package*.json ./
 RUN npm ci --omit=dev
 
