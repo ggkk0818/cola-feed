@@ -4,7 +4,8 @@
   "description": "Feed tracking service with API and static web UI",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "docker:build": "node scripts/build-docker.js"
   },
   "keywords": [],
   "author": "",

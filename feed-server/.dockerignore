@@ -4,3 +4,5 @@ npm-debug.log*
 .gitignore
 Dockerfile
 docker-compose.yml
+data/clients.json
+data/feed-records.json
