@@ -2,6 +2,7 @@ services:
   feed-server:
     build:
       context: .
+      network: host
     container_name: feed-server
     restart: unless-stopped
     environment:
