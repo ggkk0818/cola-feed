@@ -2,6 +2,72 @@
 
 #include <time.h>
 
+namespace {
+bool isDecimalNumber(const String& text) {
+  if (text.isEmpty()) {
+    return false;
+  }
+
+  for (size_t index = 0; index < text.length(); ++index) {
+    const char c = text.charAt(index);
+    if (c < '0' || c > '9') {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool shouldRefreshForDiffText(const String& diffText) {
+  // 无数据或 NOW 由业务要求强制刷新。
+  if (diffText == "无数据" || diffText == "NOW") {
+    return true;
+  }
+
+  // 解析 XM / XH / XHYM，转换成总分钟数后判断是否为 5 的倍数。
+  long totalMinutes = -1;
+  const int hourSeparatorIndex = diffText.indexOf('H');
+  if (hourSeparatorIndex < 0) {
+    if (!diffText.endsWith("M")) {
+      return false;
+    }
+
+    const String minutePart = diffText.substring(0, diffText.length() - 1);
+    if (!isDecimalNumber(minutePart)) {
+      return false;
+    }
+
+    totalMinutes = minutePart.toInt();
+  } else {
+    const String hourPart = diffText.substring(0, hourSeparatorIndex);
+    if (!isDecimalNumber(hourPart)) {
+      return false;
+    }
+
+    const long hours = hourPart.toInt();
+    if (diffText.endsWith("H")) {
+      totalMinutes = hours * 60L;
+    } else if (diffText.endsWith("M") && diffText.length() > static_cast<size_t>(hourSeparatorIndex + 2)) {
+      const String minutePart = diffText.substring(hourSeparatorIndex + 1, diffText.length() - 1);
+      if (!isDecimalNumber(minutePart)) {
+        return false;
+      }
+
+      const long minutes = minutePart.toInt();
+      if (minutes < 0 || minutes >= 60) {
+        return false;
+      }
+
+      totalMinutes = hours * 60L + minutes;
+    } else {
+      return false;
+    }
+  }
+
+  return (totalMinutes >= 5L) && ((totalMinutes % 5L) == 0L);
+}
+}  // namespace
+
 FeedController::FeedController()
     : lastFeedDiffTimeSeconds_(0),
       lastFeedDiffTimeStr_(""),
@@ -57,6 +123,7 @@ void FeedController::calcFeedTime() {
 
   bool foundLatest = false;
   time_t latestEndEpochSeconds = 0;
+  // 在缓存中找到最新一条喂食结束时间。
   for (size_t index = 0; index < feedRecords_.size(); ++index) {
     time_t endEpochSeconds = 0;
     if (!parseDateTimeToEpoch(feedRecords_[index].endTime, endEpochSeconds)) {
@@ -104,6 +171,7 @@ void FeedController::updateServerTime() {
     return;
   }
 
+  // 使用板载时钟推进服务端时间，避免每次都依赖网络同步。
   serverTimeEpochSeconds_ += static_cast<time_t>(elapsedSeconds);
   lastBoardTimestampMs_ += elapsedSeconds * 1000UL;
 }
@@ -158,11 +226,13 @@ String FeedController::latestFeedEndTime() const {
 bool FeedController::renderFeedScreenIfNeeded(DrawingModule& drawingModule, bool wifiConnected,
                                               const String& localIp) {
   if (!wifiConnected) {
+    // 断网时重置节流计时，恢复联网后可立即触发一次渲染。
     lastFeedRenderTickMs_ = 0;
     return false;
   }
 
   const uint32_t nowMs = millis();
+  // 以固定周期触发渲染判定，降低墨水屏刷新频率。
   const bool shouldRender =
       (lastFeedRenderTickMs_ == 0) ||
       (static_cast<uint32_t>(nowMs - lastFeedRenderTickMs_) >= kFeedRenderIntervalMs);
@@ -176,9 +246,11 @@ bool FeedController::renderFeedScreenIfNeeded(DrawingModule& drawingModule, bool
   const bool hasLatestFeedData = hasFeedData();
   const String latestEndTime = hasLatestFeedData ? latestFeedEndTime() : String("");
   const String diffText = lastFeedDiffTimeStr_.isEmpty() ? String("无数据") : lastFeedDiffTimeStr_;
+  const bool shouldRefreshByDiffText = shouldRefreshForDiffText(diffText);
 
+  // 当关键展示字段变化，或命中 diffText 的定时刷新策略时刷新页面。
   const bool shouldRefresh =
-      !hasRenderedFeedScreen_ || (diffText != lastRenderedDiffText_) ||
+      !hasRenderedFeedScreen_ || (diffText != lastRenderedDiffText_ && shouldRefreshByDiffText) ||
       (hasLatestFeedData != lastRenderedHasLatestFeedData_) ||
       (latestEndTime != lastRenderedLatestEndTime_) ||
       (wifiConnected != lastRenderedWifiConnected_) ||
