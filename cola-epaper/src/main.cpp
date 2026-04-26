@@ -11,9 +11,11 @@ FeedController feedController;
 NetworkModule networkModule;
 WebServerModule webServerModule;
 WifiModule wifiModule;
+unsigned long startupTimeMs = 0;
 
 void setup() {
   Serial.begin(115200);
+  startupTimeMs = millis();
 
   drawingModule.begin();
   drawingModule.renderLogo();
@@ -28,7 +30,6 @@ void setup() {
 
   if (connected) {
     webServerModule.begin(networkModule, feedController, drawingModule, wifiModule);
-    feedController.renderFeedScreenIfNeeded(drawingModule, true, wifiModule.localIp());
   } else {
     drawingModule.renderNoNetwork();
   }
@@ -46,7 +47,12 @@ void loop() {
 
   const String localIp = wifiConnected ? wifiModule.localIp() : String("");
   networkModule.handleDiscoveryBroadcast(wifiConnected, localIp);
-  feedController.renderFeedScreenIfNeeded(drawingModule, wifiConnected, localIp);
+
+  if (millis() - startupTimeMs > 25000UL) {
+    // Only attempt to render the feed screen after 25 seconds have passed since startup, 
+    // to give the web server some time to start and potentially receive feed data from the client.
+    feedController.renderFeedScreenIfNeeded(drawingModule, wifiConnected, localIp);
+  }
 
   delay(1000);
 }
