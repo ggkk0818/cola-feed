@@ -26,6 +26,7 @@ class FeedController {
   const std::vector<FeedRecord>& feedRecords() const;
   long lastFeedDiffTimeSeconds() const;
   String lastFeedDiffTimeStr() const;
+  bool isNearFeedingTime() const;
   bool renderFeedScreenIfNeeded(DrawingModule& drawingModule, bool wifiConnected,
                                 const String& localIp);
 
@@ -46,6 +47,9 @@ class FeedController {
   String lastRenderedIp_;
   String lastRenderedDiffText_;
   String lastRenderedLatestEndTime_;
+  bool lastRenderedNearFeedingTime_;
+
+  bool isNearFeedingTime_;
 
   bool hasServerTime_;
   time_t serverTimeEpochSeconds_;

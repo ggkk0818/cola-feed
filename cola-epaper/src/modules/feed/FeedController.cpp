@@ -66,6 +66,26 @@ bool shouldRefreshForDiffText(const String& diffText) {
 
   return (totalMinutes >= 5L) && ((totalMinutes % 5L) == 0L);
 }
+
+bool isDaytimePeriod(time_t epochSeconds) {
+  struct tm localTimeInfo;
+  if (localtime_r(&epochSeconds, &localTimeInfo) == nullptr) {
+    return true;
+  }
+
+  const int hour = localTimeInfo.tm_hour;
+  return (hour >= 8) && (hour < 20);
+}
+
+bool shouldMarkNearFeeding(long diffSeconds, time_t currentEpochSeconds) {
+  if (diffSeconds <= 0) {
+    return false;
+  }
+
+  const long thresholdSeconds =
+      isDaytimePeriod(currentEpochSeconds) ? (90L * 60L) : (3L * 60L * 60L);
+  return diffSeconds > thresholdSeconds;
+}
 }  // namespace
 
 FeedController::FeedController()
@@ -73,12 +93,14 @@ FeedController::FeedController()
       lastFeedDiffTimeStr_(""),
       hasRenderedFeedScreen_(false),
       lastRenderTimestampMs_(0),
-  lastFeedRenderTickMs_(0),
+      lastFeedRenderTickMs_(0),
       lastRenderedWifiConnected_(false),
       lastRenderedHasLatestFeedData_(false),
       lastRenderedIp_(""),
       lastRenderedDiffText_(""),
       lastRenderedLatestEndTime_(""),
+      lastRenderedNearFeedingTime_(false),
+      isNearFeedingTime_(false),
       hasServerTime_(false),
       serverTimeEpochSeconds_(0),
       lastBoardTimestampMs_(0) {
@@ -106,6 +128,7 @@ void FeedController::clearFeedData() {
   feedRecords_.clear();
   lastFeedDiffTimeSeconds_ = 0;
   lastFeedDiffTimeStr_ = "";
+  isNearFeedingTime_ = false;
 }
 
 void FeedController::calcFeedTime() {
@@ -114,6 +137,7 @@ void FeedController::calcFeedTime() {
   if (!hasFeedData()) {
     lastFeedDiffTimeSeconds_ = 0;
     lastFeedDiffTimeStr_ = "";
+    isNearFeedingTime_ = false;
     return;
   }
 
@@ -139,12 +163,14 @@ void FeedController::calcFeedTime() {
   if (!foundLatest || currentEpochSeconds <= latestEndEpochSeconds) {
     lastFeedDiffTimeSeconds_ = 0;
     lastFeedDiffTimeStr_ = formatDiffTime(0);
+    isNearFeedingTime_ = false;
     return;
   }
 
   const long diffSeconds = static_cast<long>(currentEpochSeconds - latestEndEpochSeconds);
   lastFeedDiffTimeSeconds_ = diffSeconds;
   lastFeedDiffTimeStr_ = formatDiffTime(diffSeconds);
+  isNearFeedingTime_ = shouldMarkNearFeeding(diffSeconds, currentEpochSeconds);
 }
 
 bool FeedController::setServerTime(const String& serverTimeStr) {
@@ -190,6 +216,10 @@ long FeedController::lastFeedDiffTimeSeconds() const {
 
 String FeedController::lastFeedDiffTimeStr() const {
   return lastFeedDiffTimeStr_;
+}
+
+bool FeedController::isNearFeedingTime() const {
+  return isNearFeedingTime_;
 }
 
 String FeedController::latestFeedEndTime() const {
@@ -246,6 +276,7 @@ bool FeedController::renderFeedScreenIfNeeded(DrawingModule& drawingModule, bool
   const bool hasLatestFeedData = hasFeedData();
   const String latestEndTime = hasLatestFeedData ? latestFeedEndTime() : String("");
   const String diffText = lastFeedDiffTimeStr_.isEmpty() ? String("无数据") : lastFeedDiffTimeStr_;
+  const bool nearFeedingTime = isNearFeedingTime_;
   const bool shouldRefreshByDiffText = shouldRefreshForDiffText(diffText);
 
   // 当关键展示字段变化，或命中 diffText 的定时刷新策略时刷新页面。
@@ -260,7 +291,8 @@ bool FeedController::renderFeedScreenIfNeeded(DrawingModule& drawingModule, bool
     return false;
   }
 
-  drawingModule.renderFeedScreen(wifiConnected, localIp, diffText, hasLatestFeedData, latestEndTime);
+  drawingModule.renderFeedScreen(wifiConnected, localIp, diffText, hasLatestFeedData,
+                                 latestEndTime, nearFeedingTime);
 
   hasRenderedFeedScreen_ = true;
   lastRenderTimestampMs_ = millis();
@@ -269,6 +301,7 @@ bool FeedController::renderFeedScreenIfNeeded(DrawingModule& drawingModule, bool
   lastRenderedIp_ = localIp;
   lastRenderedDiffText_ = diffText;
   lastRenderedLatestEndTime_ = latestEndTime;
+  lastRenderedNearFeedingTime_ = nearFeedingTime;
 
   return true;
 }

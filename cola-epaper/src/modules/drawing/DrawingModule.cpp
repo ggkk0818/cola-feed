@@ -122,6 +122,21 @@ static void drawCenterText3x(DisplayType& display, U8G2_FOR_ADAFRUIT_GFX& fonts,
     }
   }
 }
+
+String formatDateTimeWithoutSeconds(const String& dateTime) {
+  // Keep YYYY-MM-DD HH:MM and drop trailing seconds when input is HH:MM:SS.
+  const int lastColonIndex = dateTime.lastIndexOf(':');
+  if (lastColonIndex <= 0) {
+    return dateTime;
+  }
+
+  const int firstColonIndex = dateTime.indexOf(':');
+  if (firstColonIndex < 0 || firstColonIndex == lastColonIndex) {
+    return dateTime;
+  }
+
+  return dateTime.substring(0, lastColonIndex);
+}
 }  // namespace
 
 DrawingModule::DrawingModule()
@@ -240,7 +255,8 @@ void DrawingModule::renderWifiList(const std::vector<String>& ssidList) {
 
 void DrawingModule::renderFeedScreen(bool wifiConnected, const String& localIp,
                                      const String& lastFeedDiffTimeStr, bool hasLatestFeedData,
-                                     const String& latestFeedEndTime) {
+                                     const String& latestFeedEndTime,
+                                     bool isNearFeedingTime) {
   fonts_.setFont(u8g2_font_wqy16_t_gb2312);
 
   const int16_t centerX = display_.width() / 2;
@@ -248,6 +264,7 @@ void DrawingModule::renderFeedScreen(bool wifiConnected, const String& localIp,
 
   const char* titleText = "距离上次喂奶";
   const String mainText = lastFeedDiffTimeStr.isEmpty() ? String("无数据") : lastFeedDiffTimeStr;
+  const String latestFeedEndTimeText = formatDateTimeWithoutSeconds(latestFeedEndTime);
 
   const int16_t fontAscent = fonts_.getFontAscent();
   const int16_t fontHeight = fontAscent - fonts_.getFontDescent();
@@ -256,14 +273,18 @@ void DrawingModule::renderFeedScreen(bool wifiConnected, const String& localIp,
   const int16_t titleX = centerX - (titleWidth / 2);
   const int16_t titleBaselineY = centerY - 50;
 
-  const int16_t latestWidth = hasLatestFeedData ? fonts_.getUTF8Width(latestFeedEndTime.c_str()) : 0;
+  const int16_t latestWidth =
+      hasLatestFeedData ? fonts_.getUTF8Width(latestFeedEndTimeText.c_str()) : 0;
   const int16_t latestX = centerX - (latestWidth / 2);
-  const int16_t latestBaselineY = centerY + 50;
+  const int16_t latestBaselineY = centerY + 60;
 
   const int16_t topPadding = 6;
   const int16_t rightPadding = 6;
   const int16_t iconSize = 16;
   const int16_t iconSpacing = 4;
+  const int16_t warningLineGap = -10;
+  const int16_t warningLineHeight = 6;
+  const int16_t warningLineRadius = 3;
 
   display_.firstPage();
   do {
@@ -286,23 +307,39 @@ void DrawingModule::renderFeedScreen(bool wifiConnected, const String& localIp,
     fonts_.setCursor(titleX, titleBaselineY);
     fonts_.print(titleText);
 
+    int16_t mainTextVisualWidth = 0;
+    int16_t mainTextBottomY = centerY;
+
     if (hasLatestFeedData && !lastFeedDiffTimeStr.isEmpty()) {
       fonts_.setFont(u8g2_font_logisoso58_tr);
       const int16_t mainWidth = fonts_.getUTF8Width(lastFeedDiffTimeStr.c_str());
       const int16_t mainAscent = fonts_.getFontAscent();
       const int16_t mainDescent = fonts_.getFontDescent();
       const int16_t mainX = centerX - (mainWidth / 2);
-      const int16_t mainBaselineY = centerY + ((mainAscent + mainDescent) / 2);
+      const int16_t mainBaselineY = centerY + ((mainAscent + mainDescent) / 2) + 10;
       fonts_.setCursor(mainX, mainBaselineY);
       fonts_.print(lastFeedDiffTimeStr);
+      mainTextVisualWidth = mainWidth;
+      mainTextBottomY = mainBaselineY - mainDescent;
       fonts_.setFont(u8g2_font_wqy16_t_gb2312);
     } else {
-      drawCenterText3x(display_, fonts_, mainText, centerX, centerY);
+      const int16_t fallbackMainWidth = fonts_.getUTF8Width(mainText.c_str()) * 3;
+      const int16_t fallbackMainHeight = (fonts_.getFontAscent() - fonts_.getFontDescent()) * 3;
+      drawCenterText3x(display_, fonts_, mainText, centerX, centerY + 10);
+      mainTextVisualWidth = fallbackMainWidth;
+      mainTextBottomY = centerY + 10 + (fallbackMainHeight / 2);
     }
 
-    if (hasLatestFeedData && !latestFeedEndTime.isEmpty()) {
+    if (isNearFeedingTime && mainTextVisualWidth > 0) {
+      const int16_t warningLineX = centerX - (mainTextVisualWidth / 2);
+      const int16_t warningLineY = mainTextBottomY + warningLineGap;
+      display_.fillRoundRect(warningLineX, warningLineY, mainTextVisualWidth, warningLineHeight,
+                             warningLineRadius, GxEPD_RED);
+    }
+
+    if (hasLatestFeedData && !latestFeedEndTimeText.isEmpty()) {
       fonts_.setCursor(latestX, latestBaselineY);
-      fonts_.print(latestFeedEndTime);
+      fonts_.print(latestFeedEndTimeText);
     }
   } while (display_.nextPage());
 
