@@ -135,7 +135,8 @@ class ClientService {
 
     const now = new Date();
     const nowString = formatDateTime(now);
-    const firstSyncReadyTime = formatDateTime(new Date(now.getTime() - 61 * 1000));
+    // 1440 minutes (24 hours) before now, to allow first sync ready
+    const firstSyncReadyTime = formatDateTime(new Date(now.getTime() - 1440 * 60 * 1000));
     const matched = this.clients.find((client) => client.chipId === chipId);
 
     if (!matched) {
@@ -207,7 +208,9 @@ class ClientService {
       const updateDate = parseDateTime(client.updateTime);
       const updateTimeMs = updateDate ? updateDate.getTime() : 0;
 
-      if (!force && nowMs - updateTimeMs < 60 * 1000) {
+      // If not force sync, only sync clients that 
+      // haven't been updated in the last 5 minutes
+      if (!force && nowMs - updateTimeMs < 5 * 60 * 1000) {
         continue;
       }
 
@@ -220,7 +223,9 @@ class ClientService {
         const heartbeatDate = parseDateTime(client.heartbeatTime);
         const heartbeatMs = heartbeatDate ? heartbeatDate.getTime() : 0;
 
-        if (nowMs - heartbeatMs > 5 * 60 * 1000) {
+        // If failed to sync, but heartbeat is within 10 minutes, 
+        // keep it online and wait for next sync
+        if (nowMs - heartbeatMs > 10 * 60 * 1000) {
           client.isOnline = false;
           hasChanges = true;
         }

@@ -23,7 +23,8 @@ class NetworkModule {
 
  private:
   static constexpr uint16_t kDiscoveryBroadcastPort = 6113;
-  static constexpr unsigned long kDiscoveryBroadcastIntervalMs = 60000UL;
+  // 每 5 分钟广播一次，告知局域网内的客户端当前设备的 IP 地址，方便客户端发现设备并连接
+  static constexpr unsigned long kDiscoveryBroadcastIntervalMs = 5 * 60000UL;
 
   WiFiUDP udp_;
   WebServer webServer_;
