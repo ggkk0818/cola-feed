@@ -26,6 +26,14 @@ bool LcdModule::begin() {
   tft_.setTextColor(ST77XX_WHITE);
   tft_.print("LCD OK");
   tft_.setTextWrap(true);
+
+  u8g2_.begin(tft_);
+  u8g2_.setFontMode(1);
+  u8g2_.setForegroundColor(ST77XX_WHITE);
+  u8g2_.setBackgroundColor(ST77XX_BLACK);
+  u8g2_.setFontDirection(0);
+  u8g2_.setFont(u8g2_font_unifont_t_chinese2);
+
   initialized_ = true;
   return true;
 }
@@ -55,6 +63,16 @@ void LcdModule::printText(const String& text, int16_t x, int16_t y, uint16_t col
   tft_.setTextColor(color);
   tft_.setTextSize(textSize);
   tft_.print(text);
+}
+
+void LcdModule::printUtf8(const String& text, int16_t x, int16_t y, uint16_t color) {
+  if (!initialized_) {
+    return;
+  }
+
+  u8g2_.setForegroundColor(color);
+  u8g2_.setCursor(x, y);
+  u8g2_.print(text);
 }
 
 void LcdModule::drawImage(int16_t x, int16_t y, const uint16_t* imageData, int16_t width,
