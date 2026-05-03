@@ -32,7 +32,7 @@ bool LcdModule::begin() {
   u8g2_.setForegroundColor(ST77XX_WHITE);
   u8g2_.setBackgroundColor(ST77XX_BLACK);
   u8g2_.setFontDirection(0);
-  u8g2_.setFont(u8g2_font_unifont_t_chinese2);
+  u8g2_.setFont(u8g2_font_wqy16_t_gb2312);
 
   initialized_ = true;
   return true;

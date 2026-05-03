@@ -31,8 +31,9 @@ void setup() {
   }
 
   led.begin();
-  led.setColor(0, 60, 0);
-  led.on();
+  // led.setColor(0, 60, 0);
+  // led.on();
+  led.off();
 
   wifiProvisioning.begin();
 }
