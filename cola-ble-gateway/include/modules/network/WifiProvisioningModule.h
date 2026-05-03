@@ -5,15 +5,31 @@
 #include <Preferences.h>
 #include <WebServer.h>
 
+#include <functional>
+
 #include "modules/display/LcdModule.h"
 #include "modules/storage/TfCardModule.h"
 
 class WifiProvisioningModule {
  public:
+  enum class ConnectionState {
+    kDisconnected,
+    kConnecting,
+    kConnected,
+    kProvisioning,
+  };
+
+  using StateChangedCallback = std::function<void(ConnectionState)>;
+
   WifiProvisioningModule(LcdModule& lcd, TfCardModule& tfCard);
 
   void begin();
   void loop();
+  void setStateChangedCallback(StateChangedCallback callback);
+
+  bool isConnected() const;
+  bool isProvisioningMode() const;
+  ConnectionState currentState() const;
 
  private:
   struct WifiCredentials {
@@ -45,6 +61,8 @@ class WifiProvisioningModule {
 
   bool decryptPassword(const String& encryptedPassword, String* decryptedPassword) const;
 
+  void setState(ConnectionState state);
+
   void showProvisioningScreen() const;
   void showConnectingScreen(const String& ssid) const;
   void showConnectResult(bool success, const String& message) const;
@@ -63,4 +81,7 @@ class WifiProvisioningModule {
   bool pendingConnect_ = false;
   WifiCredentials pendingCredentials_;
   String apSsid_;
+
+  ConnectionState state_ = ConnectionState::kDisconnected;
+  StateChangedCallback stateChangedCallback_;
 };

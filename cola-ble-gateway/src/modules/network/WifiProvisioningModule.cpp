@@ -76,6 +76,33 @@ constexpr const char* kRsaPrivateKeyPassword = "abc123";
 WifiProvisioningModule::WifiProvisioningModule(LcdModule& lcd, TfCardModule& tfCard)
     : lcd_(lcd), tfCard_(tfCard), webServer_(80) {}
 
+void WifiProvisioningModule::setStateChangedCallback(StateChangedCallback callback) {
+  stateChangedCallback_ = callback;
+}
+
+bool WifiProvisioningModule::isConnected() const {
+  return state_ == ConnectionState::kConnected;
+}
+
+bool WifiProvisioningModule::isProvisioningMode() const {
+  return provisioningModeActive_;
+}
+
+WifiProvisioningModule::ConnectionState WifiProvisioningModule::currentState() const {
+  return state_;
+}
+
+void WifiProvisioningModule::setState(ConnectionState state) {
+  if (state_ == state) {
+    return;
+  }
+
+  state_ = state;
+  if (stateChangedCallback_) {
+    stateChangedCallback_(state_);
+  }
+}
+
 void WifiProvisioningModule::begin() {
   preferences_.begin(kPrefsNamespace, false);
 
@@ -99,6 +126,14 @@ void WifiProvisioningModule::loop() {
   if (provisioningModeActive_) {
     dnsServer_.processNextRequest();
     webServer_.handleClient();
+  }
+
+  // If station mode unexpectedly drops (router reboot, signal loss, etc.),
+  // leave BLE mode and return to provisioning mode automatically.
+  if (!provisioningModeActive_ && !pendingConnect_ && isConnected() && WiFi.status() != WL_CONNECTED) {
+    setState(ConnectionState::kDisconnected);
+    enterProvisioningMode();
+    return;
   }
 
   if (!pendingConnect_) {
@@ -135,6 +170,7 @@ void WifiProvisioningModule::saveCredentials(const WifiCredentials& credentials)
 
 bool WifiProvisioningModule::tryConnectStation(const WifiCredentials& credentials, bool saveOnSuccess) {
   showConnectingScreen(credentials.ssid);
+  setState(ConnectionState::kConnecting);
 
   WiFi.mode(WIFI_STA);
   WiFi.disconnect(true, true);
@@ -155,14 +191,19 @@ bool WifiProvisioningModule::tryConnectStation(const WifiCredentials& credential
       saveCredentials(credentials);
     }
 
+    provisioningModeActive_ = false;
+
     showConnectResult(true, WiFi.localIP().toString());
 
     delay(3000);
-    // TODO: Start BLE Mesh network after WiFi is connected successfully.
-    // ESP.restart();
+
+    // Notify external modules (such as BLE) after connection result prompt finishes.
+    setState(ConnectionState::kConnected);
+
     return true;
   }
 
+  setState(ConnectionState::kDisconnected);
   showConnectResult(false, "请检查账号或密码");
   delay(10000);
   return false;
@@ -188,6 +229,7 @@ void WifiProvisioningModule::enterProvisioningMode() {
   dnsServer_.start(kDnsPort, "*", WiFi.softAPIP());
 
   provisioningModeActive_ = true;
+  setState(ConnectionState::kProvisioning);
   showProvisioningScreen();
 }
 

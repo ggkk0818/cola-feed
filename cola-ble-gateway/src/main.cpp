@@ -1,5 +1,6 @@
 #include <Arduino.h>
 
+#include "modules/bluetooth/BleMeshModule.h"
 #include "modules/display/LcdModule.h"
 #include "modules/i2c/I2cModule.h"
 #include "modules/led/RgbLedModule.h"
@@ -11,6 +12,7 @@ LcdModule lcd;
 TfCardModule tfCard;
 RgbLedModule led;
 I2cModule i2c;
+BleMeshModule bleMesh(lcd);
 WifiProvisioningModule wifiProvisioning(lcd, tfCard);
 }  // namespace
 
@@ -35,10 +37,14 @@ void setup() {
   // led.on();
   led.off();
 
+  bleMesh.begin();
+  wifiProvisioning.setStateChangedCallback(
+      [](WifiProvisioningModule::ConnectionState state) { bleMesh.handleWifiStateChange(state); });
   wifiProvisioning.begin();
 }
 
 void loop() {
   wifiProvisioning.loop();
+  bleMesh.loop();
   delay(10);
 }
