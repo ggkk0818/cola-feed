@@ -1,0 +1,56 @@
+:root {
+  color-scheme: light dark;
+  --font-main: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+    'Segoe UI', sans-serif;
+  --bg-main: #f4f7fb;
+  --bg-ambient: #e7f5f4;
+  --card-bg: #ffffff;
+  --soft-bg: #f6faf9;
+  --card-border: #dce5e8;
+  --text-main: #1f2a37;
+  --text-muted: #526171;
+  --brand: #0f766e;
+  --success: #15803d;
+  --danger: #b42318;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-main: #0e1621;
+    --bg-ambient: #0b2a2f;
+    --card-bg: #132131;
+    --soft-bg: #102536;
+    --card-border: #294055;
+    --text-main: #e4edf7;
+    --text-muted: #a2b2c3;
+    --brand: #2dd4bf;
+    --success: #4ade80;
+    --danger: #fb7185;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-main);
+  color: var(--text-main);
+  background:
+    radial-gradient(circle at 10% 10%, rgb(45 212 191 / 18%), transparent 35%),
+    radial-gradient(circle at 90% 15%, rgb(14 116 144 / 14%), transparent 30%),
+    linear-gradient(160deg, var(--bg-main), var(--bg-ambient));
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
