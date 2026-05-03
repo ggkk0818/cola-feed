@@ -1,7 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { fetchWifiList } from '../api/wifi'
-import scanIcon from '../assets/icons/scan.svg'
 
 const props = defineProps({
   modelValue: {
@@ -115,7 +114,7 @@ function handleOverlayClick(event) {
             :disabled="isLoading"
             @click="scanNetworks"
           >
-            <img :src="scanIcon" alt="" aria-hidden="true" />
+            <span class="icon-mask icon-scan" aria-hidden="true"></span>
             {{ isLoading ? '扫描中...' : '扫描网络' }}
           </button>
           <button
@@ -228,7 +227,17 @@ function handleOverlayClick(event) {
   color: var(--text-main);
 }
 
-.outline-btn img {
+.icon-mask {
+  display: inline-block;
+  flex: 0 0 auto;
+  background-color: var(--icon-color, var(--icon-muted));
+  -webkit-mask: var(--icon-url) no-repeat center / contain;
+  mask: var(--icon-url) no-repeat center / contain;
+}
+
+.icon-scan {
+  --icon-url: url('../assets/icons/scan.svg');
+  --icon-color: var(--brand);
   width: 16px;
   height: 16px;
 }

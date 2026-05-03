@@ -1,8 +1,5 @@
 <script setup>
 import { computed, ref } from 'vue'
-import wifiIcon from '../assets/icons/wifi.svg'
-import passwordIcon from '../assets/icons/password.svg'
-import scanIcon from '../assets/icons/scan.svg'
 import NetworkSelectDialog from '../components/NetworkSelectDialog.vue'
 import {
   fetchRsaPublicKey,
@@ -68,7 +65,7 @@ async function handleConnect() {
       <div class="form-row">
         <label for="ssid">网络名称</label>
         <div class="input-wrap">
-          <img :src="wifiIcon" alt="" aria-hidden="true" />
+          <span class="icon-mask icon-wifi" aria-hidden="true"></span>
           <input
             id="ssid"
             v-model="ssid"
@@ -78,7 +75,7 @@ async function handleConnect() {
             @click="openNetworkDialog"
           />
           <button type="button" class="scan-btn" @click="openNetworkDialog">
-            <img :src="scanIcon" alt="" aria-hidden="true" />
+            <span class="icon-mask icon-scan" aria-hidden="true"></span>
             扫描网络
           </button>
         </div>
@@ -87,7 +84,7 @@ async function handleConnect() {
       <div class="form-row">
         <label for="password">网络密码</label>
         <div class="input-wrap">
-          <img :src="passwordIcon" alt="" aria-hidden="true" />
+          <span class="icon-mask icon-password" aria-hidden="true"></span>
           <input
             id="password"
             v-model="password"
@@ -172,10 +169,33 @@ async function handleConnect() {
   gap: 8px;
 }
 
-.input-wrap > img {
+.icon-mask {
+  display: inline-block;
+  flex: 0 0 auto;
+  background-color: var(--icon-color, var(--icon-muted));
+  -webkit-mask: var(--icon-url) no-repeat center / contain;
+  mask: var(--icon-url) no-repeat center / contain;
+}
+
+.icon-wifi {
+  --icon-url: url('../assets/icons/wifi.svg');
+  --icon-color: var(--icon-muted);
   width: 18px;
   height: 18px;
-  opacity: 0.85;
+}
+
+.icon-password {
+  --icon-url: url('../assets/icons/password.svg');
+  --icon-color: var(--icon-muted);
+  width: 18px;
+  height: 18px;
+}
+
+.icon-scan {
+  --icon-url: url('../assets/icons/scan.svg');
+  --icon-color: var(--brand);
+  width: 15px;
+  height: 15px;
 }
 
 .input-wrap input {
@@ -199,11 +219,6 @@ async function handleConnect() {
   align-items: center;
   gap: 6px;
   white-space: nowrap;
-}
-
-.scan-btn img {
-  width: 15px;
-  height: 15px;
 }
 
 .connect-btn {

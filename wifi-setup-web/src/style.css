@@ -9,6 +9,7 @@
   --card-border: #dce5e8;
   --text-main: #1f2a37;
   --text-muted: #526171;
+  --icon-muted: #587285;
   --brand: #0f766e;
   --success: #15803d;
   --danger: #b42318;
@@ -23,6 +24,7 @@
     --card-border: #294055;
     --text-main: #e4edf7;
     --text-muted: #a2b2c3;
+    --icon-muted: #b4c2d0;
     --brand: #2dd4bf;
     --success: #4ade80;
     --danger: #fb7185;
