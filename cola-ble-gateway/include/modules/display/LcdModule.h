@@ -9,6 +9,8 @@ class LcdModule {
   LcdModule();
 
   bool begin();
+  void backlightOn();
+  void backlightOff();
   void clearScreen(uint16_t color = ST77XX_BLACK);
   void printText(const String& text, int16_t x = 0, int16_t y = 0, uint16_t color = ST77XX_WHITE,
                  uint8_t textSize = 1);

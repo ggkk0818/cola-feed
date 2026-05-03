@@ -53,6 +53,10 @@ void setup() {
   led.begin();
   led.setColor(0, 0, 255);
   led.on();
+
+  delay(10000);
+  lcd.backlightOff();
+  led.off();
 }
 
 void loop() {

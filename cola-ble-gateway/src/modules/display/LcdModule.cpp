@@ -2,14 +2,18 @@
 
 #include "config/BoardPins.h"
 
+namespace {
+constexpr uint8_t kBacklightOnLevel = LOW;
+constexpr uint8_t kBacklightOffLevel = HIGH;
+}
+
 LcdModule::LcdModule()
     : tft_(board::kLcdCsPin, board::kLcdDcPin, board::kLcdMosiPin, board::kLcdSclkPin,
            board::kLcdResetPin) {}
 
 bool LcdModule::begin() {
   pinMode(board::kLcdBacklightPin, OUTPUT);
-//   digitalWrite(board::kLcdBacklightPin, HIGH); // 关闭背光
-  digitalWrite(board::kLcdBacklightPin, LOW); // 开启背光
+  backlightOn();
 
   tft_.initR(INITR_MINI160x80_PLUGIN);
 
@@ -24,6 +28,16 @@ bool LcdModule::begin() {
   tft_.setTextWrap(true);
   initialized_ = true;
   return true;
+}
+
+void LcdModule::backlightOn() {
+  pinMode(board::kLcdBacklightPin, OUTPUT);
+  digitalWrite(board::kLcdBacklightPin, kBacklightOnLevel);
+}
+
+void LcdModule::backlightOff() {
+  pinMode(board::kLcdBacklightPin, OUTPUT);
+  digitalWrite(board::kLcdBacklightPin, kBacklightOffLevel);
 }
 
 void LcdModule::clearScreen(uint16_t color) {
