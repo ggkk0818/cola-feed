@@ -1,20 +1,26 @@
 #include "modules/display/LcdModule.h"
 
-#include <SPI.h>
-
 #include "config/BoardPins.h"
 
-LcdModule::LcdModule() : tft_(board::kLcdCsPin, board::kLcdDcPin, board::kLcdResetPin) {}
+LcdModule::LcdModule()
+    : tft_(board::kLcdCsPin, board::kLcdDcPin, board::kLcdMosiPin, board::kLcdSclkPin,
+           board::kLcdResetPin) {}
 
 bool LcdModule::begin() {
   pinMode(board::kLcdBacklightPin, OUTPUT);
-  digitalWrite(board::kLcdBacklightPin, HIGH);
+//   digitalWrite(board::kLcdBacklightPin, HIGH); // 关闭背光
+  digitalWrite(board::kLcdBacklightPin, LOW); // 开启背光
 
-  SPI.begin(board::kLcdSclkPin, -1, board::kLcdMosiPin, board::kLcdCsPin);
+  tft_.initR(INITR_MINI160x80_PLUGIN);
 
-  tft_.initR(INITR_BLACKTAB);
   tft_.setRotation(1);
+//   tft_.invertDisplay(true);
+  tft_.setTextSize(1);
   tft_.fillScreen(ST77XX_BLACK);
+  tft_.drawRect(0, 0, tft_.width(), tft_.height(), ST77XX_GREEN);
+  tft_.setCursor(4, 4);
+  tft_.setTextColor(ST77XX_WHITE);
+  tft_.print("LCD OK");
   tft_.setTextWrap(true);
   initialized_ = true;
   return true;

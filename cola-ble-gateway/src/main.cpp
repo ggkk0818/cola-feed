@@ -19,14 +19,17 @@ void setup() {
   delay(300);
 
   lcd.begin();
+  delay(500);
   lcd.clearScreen(ST77XX_BLACK);
-  lcd.printText("System booting...", 0, 0, ST77XX_CYAN, 1);
+  lcd.printText("System booting...", 0, 0, ST77XX_GREEN, 1);
+  delay(500);
 
   if (i2c.begin()) {
-    Serial.println("I2C bus initialized.");
+    lcd.printText("I2C bus initialized.", 0, 10, ST77XX_GREEN, 1);
   } else {
-    Serial.println("I2C bus init failed.");
+    lcd.printText("I2C bus init failed.", 0, 10, ST77XX_RED, 1);
   }
+  delay(1000);
 
   String textToDisplay;
   if (!tfCard.begin()) {
