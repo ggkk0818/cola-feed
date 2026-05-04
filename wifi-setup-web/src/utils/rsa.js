@@ -1,83 +1,78 @@
-const textEncoder = new TextEncoder()
+import JSEncrypt from 'jsencrypt'
 
-function parsePublicKeyBase64(publicKey) {
-  const normalized = String(publicKey)
-    .replace('-----BEGIN PUBLIC KEY-----', '')
-    .replace('-----BEGIN PUBLIC KEY', '')
-    .replace('-----END PUBLIC KEY-----', '')
-    .replace('-----END PUBLIC KEY', '')
+function stripPemMarkers(content) {
+  return String(content)
+    .replace(/-----BEGIN [^-]+-----/g, '')
+    .replace(/-----END [^-]+-----/g, '')
     .replace(/\s+/g, '')
-
-  if (!normalized) {
-    throw new Error('RSA 公钥格式无效。')
-  }
-
-  return normalized
 }
 
-function base64ToArrayBuffer(base64) {
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
+function wrapPemBody(base64Body, type) {
+  const lines = base64Body.match(/.{1,64}/g)
 
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index)
+  if (!lines || lines.length === 0) {
+    throw new Error('RSA 密钥格式无效。')
   }
 
-  return bytes.buffer
+  return `-----BEGIN ${type}-----\n${lines.join('\n')}\n-----END ${type}-----`
 }
 
-function arrayBufferToBase64(buffer) {
-  const bytes = new Uint8Array(buffer)
-  let binary = ''
+function normalizePublicKey(publicKey) {
+  const body = stripPemMarkers(publicKey)
 
-  for (let index = 0; index < bytes.length; index += 1) {
-    binary += String.fromCharCode(bytes[index])
+  if (!body) {
+    throw new Error('RSA 公钥不能为空。')
   }
 
-  return btoa(binary)
+  return wrapPemBody(body, 'PUBLIC KEY')
 }
 
-async function importPublicKey(publicKeyBase64) {
-  const keyData = base64ToArrayBuffer(publicKeyBase64)
+function normalizePrivateKey(privateKey) {
+  const source = String(privateKey)
+  const body = stripPemMarkers(source)
 
-  try {
-    return await crypto.subtle.importKey(
-      'spki',
-      keyData,
-      {
-        name: 'RSA-OAEP',
-        hash: 'SHA-256',
-      },
-      false,
-      ['encrypt'],
-    )
-  } catch {
-    // Some embedded devices still rely on SHA-1 for RSA-OAEP.
-    return crypto.subtle.importKey(
-      'spki',
-      keyData,
-      {
-        name: 'RSA-OAEP',
-        hash: 'SHA-1',
-      },
-      false,
-      ['encrypt'],
-    )
+  if (!body) {
+    throw new Error('RSA 私钥不能为空。')
   }
+
+  const keyType = source.includes('BEGIN RSA PRIVATE KEY')
+    ? 'RSA PRIVATE KEY'
+    : 'PRIVATE KEY'
+
+  return wrapPemBody(body, keyType)
 }
 
+export function encryptTextWithRsa(publicKey, plainText) {
+  const encryptor = new JSEncrypt()
+  encryptor.setPublicKey(normalizePublicKey(publicKey))
+
+  const content = String(plainText ?? '')
+  const encrypted =
+    typeof encryptor.encryptOAEP === 'function'
+      ? encryptor.encryptOAEP(content)
+      : false
+
+  if (!encrypted) {
+    throw new Error('RSA-OAEP 加密失败，请检查公钥格式。')
+  }
+
+  return encrypted
+}
+
+export function decryptTextWithRsa(privateKey, cipherText) {
+  const decryptor = new JSEncrypt()
+  decryptor.setPrivateKey(normalizePrivateKey(privateKey))
+
+  const decrypted = decryptor.decrypt(String(cipherText ?? ''))
+
+  if (!decrypted) {
+    throw new Error('RSA 解密失败，请检查私钥或密文。')
+  }
+
+  return decrypted
+}
+
+// Kept for compatibility with existing call sites.
 export async function encryptPasswordWithRsa(publicKey, password) {
-  if (!globalThis.crypto?.subtle) {
-    throw new Error('当前浏览器不支持 RSA 加密能力。')
-  }
-
-  const keyBase64 = parsePublicKeyBase64(publicKey)
-  const cryptoKey = await importPublicKey(keyBase64)
-  const encrypted = await crypto.subtle.encrypt(
-    { name: 'RSA-OAEP' },
-    cryptoKey,
-    textEncoder.encode(password),
-  )
-
-  return arrayBufferToBase64(encrypted)
+  return encryptTextWithRsa(publicKey, password)
 }

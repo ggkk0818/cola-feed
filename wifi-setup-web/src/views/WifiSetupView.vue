@@ -38,7 +38,7 @@ async function handleConnect() {
   statusMessage.value = ''
 
   try {
-    // Connection flow: obtain RSA key first, then send encrypted password.
+    // Connection flow: obtain RSA public key first, then encrypt password for submission.
     const publicKey = await fetchRsaPublicKey()
     const encryptedPassword = await encryptPasswordWithRsa(publicKey, password.value)
 
