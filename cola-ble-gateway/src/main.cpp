@@ -20,16 +20,20 @@ void setup() {
   Serial.begin(115200);
   delay(300);
 
+  if (tfCard.begin()) {
+    Serial.println("[BOOT] TF card initialized.");
+  } else {
+    Serial.println("[BOOT] TF card init failed.");
+  }
+
   lcd.begin();
-  delay(500);
-  lcd.clearScreen(ST77XX_BLACK);
-  lcd.printText("System booting...", 0, 0, ST77XX_GREEN, 1);
+  lcd.showBootLogoFromTfCard(tfCard);
   delay(500);
 
   if (i2c.begin()) {
-    lcd.printText("I2C bus initialized.", 0, 10, ST77XX_GREEN, 1);
+    Serial.println("[BOOT] I2C bus initialized.");
   } else {
-    lcd.printText("I2C bus init failed.", 0, 10, ST77XX_RED, 1);
+    Serial.println("[BOOT] I2C bus init failed.");
   }
 
   led.begin();
