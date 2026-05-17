@@ -6,9 +6,10 @@ const { formatDateTime, parseDateTime } = require('../utils/dateTime');
 
 class ClientService {
   constructor(options) {
-    const { dataDir, feedService, udpPort = 6113 } = options;
+    const { dataDir, feedService, weatherService = null, udpPort = 6113 } = options;
 
     this.feedService = feedService;
+    this.weatherService = weatherService;
     this.udpPort = udpPort;
     this.dataDir = dataDir;
     this.clientsFilePath = path.join(this.dataDir, 'clients.json');
@@ -196,9 +197,11 @@ class ClientService {
     const now = new Date();
     const nowMs = now.getTime();
     const nowString = formatDateTime(now);
+    const weatherData = this.weatherService ? this.weatherService.getWeatherData() : null;
     const feedPayload = {
       serverTime: nowString,
       records: this.feedService.getRecords(),
+      weatherData,
     };
 
     let hasChanges = false;
