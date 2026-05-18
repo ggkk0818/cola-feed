@@ -5,12 +5,16 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "start:dev": "dotenv -e .env.dev -- npm run start",
     "docker:build": "node scripts/build-docker.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "devDependencies": {
+    "dotenv-cli": "^8.0.0"
+  },
   "dependencies": {
     "express": "^5.2.1"
   }

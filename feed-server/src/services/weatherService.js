@@ -145,6 +145,7 @@ class WeatherService {
 
             let parsed;
             try {
+              console.log('weather api response:', url, body);
               parsed = JSON.parse(body);
             } catch (error) {
               reject(new Error('weather api invalid json'));
