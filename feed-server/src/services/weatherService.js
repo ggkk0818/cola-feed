@@ -1,5 +1,6 @@
 const http = require('http');
 const https = require('https');
+const zlib = require('zlib');
 const { URL } = require('url');
 
 class WeatherService {
@@ -80,8 +81,8 @@ class WeatherService {
     }
 
     return {
-      now: this.cachedNow,
-      daily3d: this.cachedThreeDay,
+      now: this.cachedNow.now,
+      daily3d: this.cachedThreeDay.daily,
       updateTime: this.cacheUpdatedAt,
     };
   }
@@ -130,11 +131,9 @@ class WeatherService {
           timeout: this.requestTimeoutMs,
         },
         (res) => {
-          let body = '';
-
-          res.setEncoding('utf8');
+          const chunks = [];
           res.on('data', (chunk) => {
-            body += chunk;
+            chunks.push(chunk);
           });
 
           res.on('end', () => {
@@ -143,9 +142,19 @@ class WeatherService {
               return;
             }
 
+            let body;
+            try {
+              const buffer = Buffer.concat(chunks);
+              const decodedBuffer = this.decodeResponseBody(buffer, res.headers['content-encoding']);
+              const charset = this.getCharsetFromContentType(res.headers['content-type']);
+              body = this.decodeText(decodedBuffer, charset);
+            } catch (error) {
+              reject(new Error(`weather api decode failed: ${error.message}`));
+              return;
+            }
+
             let parsed;
             try {
-              console.log('weather api response:', url, body);
               parsed = JSON.parse(body);
             } catch (error) {
               reject(new Error('weather api invalid json'));
@@ -172,6 +181,52 @@ class WeatherService {
 
       req.end();
     });
+  }
+
+  decodeResponseBody(buffer, contentEncodingHeader) {
+    const contentEncoding = Array.isArray(contentEncodingHeader)
+      ? contentEncodingHeader.join(',')
+      : contentEncodingHeader || '';
+    const encodings = contentEncoding
+      .split(',')
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+
+    return encodings.reduceRight((decodedBuffer, encoding) => {
+      switch (encoding) {
+        case 'gzip':
+          return zlib.gunzipSync(decodedBuffer);
+        case 'deflate':
+          return zlib.inflateSync(decodedBuffer);
+        case 'br':
+          return zlib.brotliDecompressSync(decodedBuffer);
+        case 'identity':
+          return decodedBuffer;
+        default:
+          throw new Error(`unsupported content-encoding: ${encoding}`);
+      }
+    }, buffer);
+  }
+
+  getCharsetFromContentType(contentTypeHeader) {
+    const contentType = Array.isArray(contentTypeHeader)
+      ? contentTypeHeader[0]
+      : contentTypeHeader || '';
+    const matched = /charset=([^;]+)/i.exec(contentType);
+
+    if (!matched) {
+      return 'utf-8';
+    }
+
+    return matched[1].trim().replace(/^"|"$/g, '').toLowerCase();
+  }
+
+  decodeText(buffer, charset) {
+    try {
+      return new TextDecoder(charset).decode(buffer);
+    } catch (error) {
+      return buffer.toString('utf8');
+    }
   }
 }
 
