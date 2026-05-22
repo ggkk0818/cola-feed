@@ -14,6 +14,9 @@
 
 #include <cstring>
 #include <memory>
+#include <vector>
+
+#include "modules/bluetooth/BleMeshModule.h"
 
 namespace {
 constexpr const char* kPrefsNamespace = "wifi_cfg";
@@ -85,6 +88,10 @@ bool containsNonAscii(const String& text) {
 WifiProvisioningModule::WifiProvisioningModule(LcdModule& lcd, TfCardModule& tfCard)
     : lcd_(lcd), tfCard_(tfCard), webServer_(80) {}
 
+void WifiProvisioningModule::attachBleMeshModule(BleMeshModule& bleMesh) {
+  bleMesh_ = &bleMesh;
+}
+
 void WifiProvisioningModule::setStateChangedCallback(StateChangedCallback callback) {
   stateChangedCallback_ = callback;
 }
@@ -134,6 +141,9 @@ void WifiProvisioningModule::begin() {
 void WifiProvisioningModule::loop() {
   if (provisioningModeActive_) {
     dnsServer_.processNextRequest();
+  }
+
+  if (provisioningModeActive_ || isConnected()) {
     webServer_.handleClient();
   }
 
@@ -201,6 +211,7 @@ bool WifiProvisioningModule::tryConnectStation(const WifiCredentials& credential
     }
 
     provisioningModeActive_ = false;
+    setupWebServer();
 
     showConnectResult(true, WiFi.localIP().toString());
 
@@ -249,6 +260,7 @@ void WifiProvisioningModule::setupWebServer() {
     webServer_.on("/api/wifi/list", HTTP_GET, [this]() { handleWifiList(); });
     webServer_.on("/api/rsa/public_key", HTTP_GET, [this]() { handleRsaPublicKey(); });
     webServer_.on("/api/wifi/connect", HTTP_POST, [this]() { handleWifiConnect(); });
+    webServer_.on("/api/feedData", HTTP_PUT, [this]() { handleFeedDataPut(); });
 
     webServer_.on("/generate_204", HTTP_GET, [this]() {
       webServer_.sendHeader("Location", "http://" + WiFi.softAPIP().toString() + "/", true);
@@ -285,6 +297,11 @@ void WifiProvisioningModule::handleRootPage() {
 }
 
 void WifiProvisioningModule::handleWifiList() {
+  if (!provisioningModeActive_) {
+    sendJsonError(403, "endpoint available in provisioning mode only");
+    return;
+  }
+
   DynamicJsonDocument responseDoc(6144);
   responseDoc["code"] = 200;
   JsonArray data = responseDoc.createNestedArray("data");
@@ -308,6 +325,11 @@ void WifiProvisioningModule::handleWifiList() {
 }
 
 void WifiProvisioningModule::handleRsaPublicKey() {
+  if (!provisioningModeActive_) {
+    sendJsonError(403, "endpoint available in provisioning mode only");
+    return;
+  }
+
   DynamicJsonDocument responseDoc(2048);
   responseDoc["code"] = 200;
   JsonObject data = responseDoc.createNestedObject("data");
@@ -319,6 +341,11 @@ void WifiProvisioningModule::handleRsaPublicKey() {
 }
 
 void WifiProvisioningModule::handleWifiConnect() {
+  if (!provisioningModeActive_) {
+    sendJsonError(403, "endpoint available in provisioning mode only");
+    return;
+  }
+
   DynamicJsonDocument requestDoc(2048);
   DeserializationError parseError = deserializeJson(requestDoc, webServer_.arg("plain"));
   if (parseError) {
@@ -373,6 +400,104 @@ void WifiProvisioningModule::handleWifiConnect() {
   String body;
   serializeJson(responseDoc, body);
   webServer_.send(200, "application/json", body);
+}
+
+void WifiProvisioningModule::handleFeedDataPut() {
+  if (provisioningModeActive_ || !isConnected()) {
+    sendJsonError(503, "feedData endpoint unavailable while not connected");
+    return;
+  }
+
+  if (bleMesh_ == nullptr) {
+    sendJsonError(500, "ble module is not ready");
+    return;
+  }
+
+  if (!webServer_.hasArg("plain")) {
+    sendJsonError(400, "missing request body");
+    return;
+  }
+
+  const String requestBody = webServer_.arg("plain");
+  if (requestBody.isEmpty()) {
+    sendJsonError(400, "empty request body");
+    return;
+  }
+
+  DynamicJsonDocument requestDoc(8192);
+  const DeserializationError parseError = deserializeJson(requestDoc, requestBody);
+  if (parseError) {
+    sendJsonError(400, "invalid json body");
+    return;
+  }
+
+  JsonVariant serverTimeVar = requestDoc["serverTime"];
+  JsonVariant recordsVar = requestDoc["records"];
+  if (!serverTimeVar.is<const char*>() || !recordsVar.is<JsonArray>()) {
+    sendJsonError(400, "serverTime must be string and records must be array");
+    return;
+  }
+
+  const String serverTime = String(serverTimeVar.as<const char*>());
+  if (!isDateTimeFormatValid(serverTime)) {
+    sendJsonError(400, "invalid serverTime format");
+    return;
+  }
+
+  JsonArray records = recordsVar.as<JsonArray>();
+  std::vector<FeedRecord> parsedRecords;
+  parsedRecords.reserve(records.size());
+
+  for (JsonObject recordObj : records) {
+    JsonVariant idVar = recordObj["id"];
+    JsonVariant startTimeVar = recordObj["startTime"];
+    JsonVariant endTimeVar = recordObj["endTime"];
+    JsonVariant durationVar = recordObj["duration"];
+
+    if (!idVar.is<const char*>() || !startTimeVar.is<const char*>() ||
+        !endTimeVar.is<const char*>() || !durationVar.is<long>()) {
+      sendJsonError(400, "record fields are invalid");
+      return;
+    }
+
+    FeedRecord record;
+    record.id = String(idVar.as<const char*>());
+    record.startTime = String(startTimeVar.as<const char*>());
+    record.endTime = String(endTimeVar.as<const char*>());
+    record.duration = durationVar.as<long>();
+
+    if (record.id.length() != 32 || record.endTime.isEmpty() || record.duration < 0) {
+      sendJsonError(400, "record value constraints failed");
+      return;
+    }
+
+    parsedRecords.push_back(record);
+  }
+
+  if (!bleMesh_->replaceFeedCache(serverTime, parsedRecords)) {
+    sendJsonError(500, "failed to update feed cache");
+    return;
+  }
+
+  DynamicJsonDocument responseDoc(512);
+  responseDoc["code"] = 200;
+  responseDoc["message"] = "ok";
+  responseDoc["savedRecords"] = static_cast<uint32_t>(parsedRecords.size());
+  responseDoc["serverTime"] = serverTime;
+
+  String body;
+  serializeJson(responseDoc, body);
+  webServer_.send(200, "application/json", body);
+}
+
+void WifiProvisioningModule::sendJsonError(int statusCode, const char* message) {
+  DynamicJsonDocument errorDoc(256);
+  errorDoc["code"] = statusCode;
+  errorDoc["message"] = message;
+
+  String body;
+  serializeJson(errorDoc, body);
+  webServer_.send(statusCode, "application/json", body);
 }
 
 void WifiProvisioningModule::handleNotFound() {
@@ -452,6 +577,28 @@ String WifiProvisioningModule::normalizeUriPath(const String& requestUri) const 
 bool WifiProvisioningModule::isCaptivePortalUri(const String& requestUri) const {
   return requestUri == "/generate_204" || requestUri == "/hotspot-detect.html" ||
          requestUri == "/connecttest.txt" || requestUri == "/ncsi.txt" || requestUri == "/fwlink";
+}
+
+bool WifiProvisioningModule::isDateTimeFormatValid(const String& dateTime) {
+  int year = 0;
+  int month = 0;
+  int day = 0;
+  int hour = 0;
+  int minute = 0;
+  int second = 0;
+
+  const int matched =
+      sscanf(dateTime.c_str(), "%d-%d-%d %d:%d:%d", &year, &month, &day, &hour, &minute, &second);
+  if (matched != 6) {
+    return false;
+  }
+
+  if (year < 1970 || month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 || hour > 23 ||
+      minute < 0 || minute > 59 || second < 0 || second > 59) {
+    return false;
+  }
+
+  return true;
 }
 
 String WifiProvisioningModule::contentTypeForPath(const String& filePath) const {

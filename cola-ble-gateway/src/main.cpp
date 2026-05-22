@@ -42,6 +42,7 @@ void setup() {
   led.off();
 
   bleMesh.begin();
+  wifiProvisioning.attachBleMeshModule(bleMesh);
   wifiProvisioning.setStateChangedCallback(
       [](WifiProvisioningModule::ConnectionState state) { bleMesh.handleWifiStateChange(state); });
   wifiProvisioning.begin();

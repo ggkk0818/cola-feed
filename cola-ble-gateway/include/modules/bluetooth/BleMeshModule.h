@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "modules/display/LcdModule.h"
+#include "modules/feed/FeedRecord.h"
 #include "modules/network/WifiProvisioningModule.h"
 
 class BLEServer;
@@ -18,6 +19,7 @@ class BleMeshModule {
   void begin();
   void loop();
   void handleWifiStateChange(WifiProvisioningModule::ConnectionState state);
+  bool replaceFeedCache(const String& serverTime, const std::vector<FeedRecord>& records);
 
   // Internal callback entry points used by BLE adapter callbacks.
   void onClientConnected();
@@ -25,17 +27,10 @@ class BleMeshModule {
   void onClientBroadcast(const String& payload);
 
  private:
-  struct FeedRecord {
-    String id;
-    String startTime;
-    String endTime;
-    int duration = 0;
-  };
-
   void startMesh();
   void stopMesh();
 
-  void refreshMockFeedCache();
+  void refreshFeedCache();
   String buildFeedPayloadJson() const;
 
   void updateScreen() const;

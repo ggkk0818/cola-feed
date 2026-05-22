@@ -55,7 +55,7 @@ class BroadcastWriteCallbacks : public BLECharacteristicCallbacks {
 BleMeshModule::BleMeshModule(LcdModule& lcd) : lcd_(lcd) {}
 
 void BleMeshModule::begin() {
-  refreshMockFeedCache();
+  refreshFeedCache();
 }
 
 void BleMeshModule::loop() {
@@ -76,6 +76,12 @@ void BleMeshModule::handleWifiStateChange(WifiProvisioningModule::ConnectionStat
   }
 
   stopMesh();
+}
+
+bool BleMeshModule::replaceFeedCache(const String& serverTime, const std::vector<FeedRecord>& records) {
+  serverTimeCache_ = serverTime;
+  feedRecordsCache_ = records;
+  return true;
 }
 
 void BleMeshModule::startMesh() {
@@ -128,24 +134,9 @@ void BleMeshModule::stopMesh() {
   clientCount_ = 0;
 }
 
-void BleMeshModule::refreshMockFeedCache() {
-  // TODO: Replace with real feed payload from WiFi server synchronization.
-  serverTimeCache_ = "2026-05-04 12:00:00";
-
+void BleMeshModule::refreshFeedCache() {
+  serverTimeCache_ = "";
   feedRecordsCache_.clear();
-  FeedRecord firstRecord;
-  firstRecord.id = "0fa08b9f3cb94a6cae0eb95fbe7fd001";
-  firstRecord.startTime = "2026-05-04 09:20:00";
-  firstRecord.endTime = "2026-05-04 09:36:00";
-  firstRecord.duration = 960;
-  feedRecordsCache_.push_back(firstRecord);
-
-  FeedRecord secondRecord;
-  secondRecord.id = "5c08467f3eb242a5b7fd1199a820e8f2";
-  secondRecord.startTime = "2026-05-04 11:02:00";
-  secondRecord.endTime = "2026-05-04 11:18:00";
-  secondRecord.duration = 960;
-  feedRecordsCache_.push_back(secondRecord);
 }
 
 String BleMeshModule::buildFeedPayloadJson() const {

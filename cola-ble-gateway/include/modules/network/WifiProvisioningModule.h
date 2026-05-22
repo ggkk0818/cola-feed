@@ -10,6 +10,8 @@
 #include "modules/display/LcdModule.h"
 #include "modules/storage/TfCardModule.h"
 
+class BleMeshModule;
+
 class WifiProvisioningModule {
  public:
   enum class ConnectionState {
@@ -26,6 +28,7 @@ class WifiProvisioningModule {
   void begin();
   void loop();
   void setStateChangedCallback(StateChangedCallback callback);
+  void attachBleMeshModule(BleMeshModule& bleMesh);
 
   bool isConnected() const;
   bool isProvisioningMode() const;
@@ -50,7 +53,11 @@ class WifiProvisioningModule {
   void handleWifiList();
   void handleRsaPublicKey();
   void handleWifiConnect();
+  void handleFeedDataPut();
   void handleNotFound();
+
+  void sendJsonError(int statusCode, const char* message);
+  static bool isDateTimeFormatValid(const String& dateTime);
 
   bool serveFileFromSd(const String& requestUri);
   String normalizeUriPath(const String& requestUri) const;
@@ -84,4 +91,5 @@ class WifiProvisioningModule {
 
   ConnectionState state_ = ConnectionState::kDisconnected;
   StateChangedCallback stateChangedCallback_;
+  BleMeshModule* bleMesh_ = nullptr;
 };
