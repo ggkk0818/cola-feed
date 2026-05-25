@@ -1,18 +1,15 @@
 #include <Arduino.h>
 
-// put function declarations here:
-int myFunction(int, int);
+#include "modules/display/DisplayModule.h"
+
+DisplayModule displayModule;
 
 void setup() {
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
+  displayModule.begin();
+  displayModule.renderLogo();
+  displayModule.hibernate();
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-}
-
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
+  // Nothing else to run after startup logo render.
 }
