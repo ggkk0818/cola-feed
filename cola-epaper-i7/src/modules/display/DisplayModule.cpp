@@ -5,10 +5,10 @@
 namespace {
 constexpr uint8_t EPD_SCK_PIN = 1;
 constexpr uint8_t EPD_MOSI_PIN = 0;
-constexpr uint8_t EPD_CS_PIN = 6;
-constexpr uint8_t EPD_RST_PIN = 8;
-constexpr uint8_t EPD_DC_PIN = 7;
-constexpr uint8_t EPD_BUSY_PIN = 9;
+constexpr uint8_t EPD_CS_PIN = 7;
+constexpr uint8_t EPD_RST_PIN = 9;
+constexpr uint8_t EPD_DC_PIN = 8;
+constexpr uint8_t EPD_BUSY_PIN = 10;
 
 constexpr uint16_t FAST_BW_WINDOW_X = 40;
 constexpr uint16_t FAST_BW_WINDOW_Y = 420;
@@ -17,15 +17,15 @@ constexpr uint16_t FAST_BW_WINDOW_H = 50;
 }  // namespace
 
 DisplayModule::DisplayModule()
-    : display_(GxEPD2_750c_GDEW075Z08(EPD_CS_PIN, EPD_DC_PIN, EPD_RST_PIN, EPD_BUSY_PIN)),
+    : display_(GxEPD2_750c_GDEY075Z08(EPD_CS_PIN, EPD_DC_PIN, EPD_RST_PIN, EPD_BUSY_PIN)),
       fastBwReady_(false) {}
 
 void DisplayModule::begin() {
   SPI.begin(EPD_SCK_PIN, -1, EPD_MOSI_PIN, EPD_CS_PIN);
   display_.epd2.selectSPI(SPI, SPISettings(4000000, MSBFIRST, SPI_MODE0));
 
-  display_.init(115200);
-  display_.setRotation(1);
+  display_.init(0);
+  display_.setRotation(0);
   display_.setTextColor(GxEPD_BLACK);
   display_.setTextSize(2);
   display_.setFullWindow();
