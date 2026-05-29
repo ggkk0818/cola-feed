@@ -125,7 +125,7 @@ class ClientService {
       return;
     }
 
-    if (!payload || payload.device_name !== 'Cola-ePaper') {
+    if (!payload || !['Cola-ePaper', 'Cola-gateway'].includes(payload.device_name)) {
       return;
     }
 
