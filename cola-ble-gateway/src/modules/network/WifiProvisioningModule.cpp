@@ -147,6 +147,11 @@ void WifiProvisioningModule::loop() {
     webServer_.handleClient();
   }
 
+  const bool wifiConnectedForDiscovery =
+      !provisioningModeActive_ && !pendingConnect_ && isConnected() && WiFi.status() == WL_CONNECTED;
+  handleDiscoveryBroadcast(
+      wifiConnectedForDiscovery, wifiConnectedForDiscovery ? WiFi.localIP().toString() : String());
+
   // If station mode unexpectedly drops (router reboot, signal loss, etc.),
   // leave BLE mode and return to provisioning mode automatically.
   if (!provisioningModeActive_ && !pendingConnect_ && isConnected() && WiFi.status() != WL_CONNECTED) {
@@ -168,6 +173,44 @@ void WifiProvisioningModule::loop() {
   if (!tryConnectStation(pendingCredentials_, true)) {
     enterProvisioningMode();
   }
+}
+
+void WifiProvisioningModule::handleDiscoveryBroadcast(bool wifiConnected, const String& localIp) {
+  if (!wifiConnected) {
+    lastWifiConnectedForDiscovery_ = false;
+    lastDiscoveryBroadcastMs_ = 0;
+    return;
+  }
+
+  const unsigned long nowMs = millis();
+  const bool firstBroadcastAfterConnected = !lastWifiConnectedForDiscovery_;
+  const bool intervalReached = (nowMs - lastDiscoveryBroadcastMs_) >= kDiscoveryBroadcastIntervalMs;
+  if (!firstBroadcastAfterConnected && !intervalReached) {
+    return;
+  }
+
+  DynamicJsonDocument doc(256);
+  doc["type"] = "discover";
+  doc["chip_id"] = String(static_cast<uint32_t>(ESP.getEfuseMac()), HEX);
+  doc["device_name"] = "Cola-gateway";
+  doc["ip"] = localIp;
+
+  String payload;
+  serializeJson(doc, payload);
+
+  if (!discoveryUdpStarted_) {
+    discoveryUdpStarted_ = discoveryUdp_.begin(kDiscoveryBroadcastPort) == 1;
+  }
+  if (!discoveryUdpStarted_) {
+    return;
+  }
+
+  discoveryUdp_.beginPacket(IPAddress(255, 255, 255, 255), kDiscoveryBroadcastPort);
+  discoveryUdp_.write(reinterpret_cast<const uint8_t*>(payload.c_str()), payload.length());
+  discoveryUdp_.endPacket();
+
+  lastWifiConnectedForDiscovery_ = true;
+  lastDiscoveryBroadcastMs_ = nowMs;
 }
 
 bool WifiProvisioningModule::loadSavedCredentials(WifiCredentials* credentials) {

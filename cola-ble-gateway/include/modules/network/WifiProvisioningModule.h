@@ -4,6 +4,7 @@
 #include <DNSServer.h>
 #include <Preferences.h>
 #include <WebServer.h>
+#include <WiFiUdp.h>
 
 #include <functional>
 
@@ -67,6 +68,7 @@ class WifiProvisioningModule {
   String makeApSsid() const;
 
   bool decryptPassword(const String& encryptedPassword, String* decryptedPassword) const;
+  void handleDiscoveryBroadcast(bool wifiConnected, const String& localIp);
 
   void setState(ConnectionState state);
 
@@ -80,10 +82,17 @@ class WifiProvisioningModule {
   Preferences preferences_;
   DNSServer dnsServer_;
   WebServer webServer_;
+  WiFiUDP discoveryUdp_;
+
+  static constexpr uint16_t kDiscoveryBroadcastPort = 6113;
+  static constexpr unsigned long kDiscoveryBroadcastIntervalMs = 5 * 60000UL;
 
   bool sdMounted_ = false;
   bool provisioningModeActive_ = false;
   bool webServerConfigured_ = false;
+  bool discoveryUdpStarted_ = false;
+  bool lastWifiConnectedForDiscovery_ = false;
+  unsigned long lastDiscoveryBroadcastMs_ = 0;
 
   bool pendingConnect_ = false;
   WifiCredentials pendingCredentials_;
