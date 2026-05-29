@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <GxEPD2_3C.h>
+#include <U8g2_for_Adafruit_GFX.h>
 
 class DisplayModule {
  public:
@@ -15,9 +16,6 @@ class DisplayModule {
   using DisplayDriver =
       GxEPD2_3C<GxEPD2_750c_GDEY075Z08, GxEPD2_750c_GDEY075Z08::HEIGHT / 2>;
 
-  void clearFastBwWindow_(uint16_t x, uint16_t y, uint16_t w, uint16_t h);
-  void drawFastBwText_(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const String& text);
-
   DisplayDriver display_;
-  bool fastBwReady_;
+  U8G2_FOR_ADAFRUIT_GFX fonts_;
 };
