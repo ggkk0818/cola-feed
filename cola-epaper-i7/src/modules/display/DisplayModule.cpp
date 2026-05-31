@@ -164,12 +164,18 @@ class FontCN32Renderer {
       return face_->spaceAdvance;
     }
 
+    const FontCN32::Glyph* glyph = FontCN32::findGlyph(codePoint);
+    if (glyph != nullptr && glyph->advance > 0) {
+      return glyph->advance;
+    }
+
     return face_->glyphAdvance;
   }
 
   void drawCodePoint(uint32_t codePoint, int16_t x, int16_t baselineY) {
     const int16_t glyphTopY = baselineY - face_->ascent;
     const int16_t glyphHeight = face_->glyphHeight;
+    const FontCN32::Glyph* glyph = FontCN32::findGlyph(codePoint);
     const int16_t glyphWidth = advanceForCodePoint(codePoint);
 
     if (!transparentBackground_) {
@@ -180,7 +186,6 @@ class FontCN32Renderer {
       return;
     }
 
-    const FontCN32::Glyph* glyph = FontCN32::findGlyph(codePoint);
     if (glyph == nullptr) {
       return;
     }
@@ -191,7 +196,12 @@ class FontCN32Renderer {
             pgm_read_byte(glyph->bitmap + (yIndex * FontCN32::kBytesPerRow) + byteIndex);
         for (uint8_t bitIndex = 0; bitIndex < 8; ++bitIndex) {
           if ((rowByte & (0x80u >> bitIndex)) != 0) {
-            display_->drawPixel(x + (byteIndex * 8) + bitIndex, glyphTopY + yIndex,
+            const int16_t sourceX = (byteIndex * 8) + bitIndex;
+            if (sourceX < glyph->xOffset || sourceX >= (glyph->xOffset + glyph->width)) {
+              continue;
+            }
+
+            display_->drawPixel(x + sourceX - glyph->xOffset, glyphTopY + yIndex,
                                 foregroundColor_);
           }
         }

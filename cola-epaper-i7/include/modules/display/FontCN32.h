@@ -26,6 +26,9 @@ struct Face {
 struct Glyph {
   uint32_t codePoint;
   const uint8_t* bitmap;
+  uint8_t xOffset;
+  uint8_t width;
+  uint8_t advance;
 };
 
 extern const Face kFace;

@@ -9,6 +9,68 @@ $glyphs = New-Object System.Collections.Generic.List[object]
 $currentChar = $null
 $currentBytes = New-Object System.Collections.Generic.List[string]
 
+$glyphWidth = 48
+$glyphHeight = 62
+$bytesPerRow = $glyphWidth / 8
+
+function Get-GlyphMetrics {
+  param(
+    [string[]]$Bytes,
+    [uint32]$CodePoint
+  )
+
+  $minX = $glyphWidth
+  $maxX = -1
+
+  for ($byteOffset = 0; $byteOffset -lt $Bytes.Count; $byteOffset++) {
+    $rowByte = [Convert]::ToByte($Bytes[$byteOffset], 16)
+    if ($rowByte -eq 0) {
+      continue
+    }
+
+    $byteIndex = $byteOffset % $bytesPerRow
+    for ($bitIndex = 0; $bitIndex -lt 8; $bitIndex++) {
+      if (($rowByte -band (0x80 -shr $bitIndex)) -eq 0) {
+        continue
+      }
+
+      $x = ($byteIndex * 8) + $bitIndex
+      if ($x -lt $minX) {
+        $minX = $x
+      }
+      if ($x -gt $maxX) {
+        $maxX = $x
+      }
+    }
+  }
+
+  if ($maxX -lt $minX) {
+    $minX = 0
+    $trimmedWidth = 0
+  }
+  else {
+    $trimmedWidth = ($maxX - $minX) + 1
+  }
+
+  $useTrimmedMetrics = ((($CodePoint -ge 0x21) -and ($CodePoint -le 0x7E)) -or
+      $CodePoint -eq 0x201C -or $CodePoint -eq 0x201D -or
+      $CodePoint -eq 0x3010 -or $CodePoint -eq 0x3011) -and $trimmedWidth -gt 0
+
+  if ($useTrimmedMetrics) {
+    return [pscustomobject]@{
+      XOffset = $minX
+      Width = $trimmedWidth
+      Advance = [Math]::Min($glyphWidth, $trimmedWidth + 1)
+    }
+  }
+
+  return [pscustomobject]@{
+    XOffset = 0
+    Width = $glyphWidth
+    Advance = $glyphWidth
+  }
+}
+
 foreach ($line in $lines) {
   if ($line.StartsWith('/*--') -and $line -match ':\s*(.*?)\s*--\*/') {
     if ($null -ne $currentChar -and $currentBytes.Count -gt 0) {
@@ -62,6 +124,9 @@ struct Face {
 struct Glyph {
   uint32_t codePoint;
   const uint8_t* bitmap;
+  uint8_t xOffset;
+  uint8_t width;
+  uint8_t advance;
 };
 
 extern const Face kFace;
@@ -111,7 +176,8 @@ for ($index = 0; $index -lt $glyphs.Count; $index++) {
 for ($index = 0; $index -lt $glyphs.Count; $index++) {
   $glyph = $glyphs[$index]
   $codePoint = [System.Char]::ConvertToUtf32($glyph.Char, 0)
-  [void]$builder.AppendLine(("  {{0x{0:X}u, glyph{1}}}," -f $codePoint, $index))
+  $metrics = Get-GlyphMetrics -Bytes $glyph.Bytes -CodePoint $codePoint
+  [void]$builder.AppendLine(("  {{0x{0:X}u, glyph{1}, {2}, {3}, {4}}}," -f $codePoint, $index, $metrics.XOffset, $metrics.Width, $metrics.Advance))
 }
 [void]$builder.AppendLine('};')
 [void]$builder.AppendLine('')
