@@ -9,6 +9,7 @@ class DisplayModule {
   DisplayModule();
 
   void begin();
+    void renderLowBattery();
   void renderLogo();
   void hibernate();
 

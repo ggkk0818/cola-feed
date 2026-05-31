@@ -3,15 +3,16 @@
 #include <Adafruit_GFX.h>
 #include <SPI.h>
 
+#include "modules/display/BatteryImage64x64.h"
 #include "modules/display/LogoImage64x64.h"
 
 namespace {
-constexpr uint8_t EPD_SCK_PIN = 1;
-constexpr uint8_t EPD_MOSI_PIN = 0;
-constexpr uint8_t EPD_CS_PIN = 7;
-constexpr uint8_t EPD_RST_PIN = 9;
-constexpr uint8_t EPD_DC_PIN = 8;
-constexpr uint8_t EPD_BUSY_PIN = 10;
+constexpr uint8_t EPD_SCK_PIN = 14;
+constexpr uint8_t EPD_MOSI_PIN = 13;
+constexpr uint8_t EPD_CS_PIN = 4;
+constexpr uint8_t EPD_RST_PIN = 23;
+constexpr uint8_t EPD_DC_PIN = 5;
+constexpr uint8_t EPD_BUSY_PIN = 24;
 
 using DisplayDriver =
   GxEPD2_3C<GxEPD2_750c_GDEY075Z08, GxEPD2_750c_GDEY075Z08::HEIGHT / 2>;
@@ -115,6 +116,22 @@ void DisplayModule::begin() {
   fonts_.setFont(u8g2_font_wqy16_t_gb2312);
 }
 
+void DisplayModule::renderLowBattery() {
+  const int16_t imageX = (display_.width() - static_cast<int16_t>(BatteryImage64x64::kWidth)) / 2;
+  const int16_t imageY =
+      (display_.height() - static_cast<int16_t>(BatteryImage64x64::kHeight)) / 2;
+
+  display_.setFullWindow();
+  display_.firstPage();
+  do {
+    display_.fillScreen(GxEPD_WHITE);
+    display_.drawBitmap(imageX, imageY, BatteryImage64x64::kBitmap, BatteryImage64x64::kWidth,
+                        BatteryImage64x64::kHeight, GxEPD_BLACK);
+  } while (display_.nextPage());
+
+  hibernate();
+}
+
 void DisplayModule::renderLogo() {
   const int16_t centerX = display_.width() / 2;
   const int16_t centerY = display_.height() / 2;
@@ -122,7 +139,7 @@ void DisplayModule::renderLogo() {
   const int16_t innerRadius = 50;
   const char* logoText = "ColaFeed";
   const String logoTextStr(logoText);
-  const int16_t logoGraphicCenterY = centerY - 44;
+  const int16_t logoGraphicCenterY = centerY;
   const int16_t logoTextCenterY = centerY + 110;
   const int16_t imageX = centerX - static_cast<int16_t>(LogoImage64x64::kWidth / 2);
   const int16_t imageY = logoGraphicCenterY - static_cast<int16_t>(LogoImage64x64::kHeight / 2);

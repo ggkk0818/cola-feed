@@ -13,7 +13,7 @@ Adafruit_NeoPixel rgbLed(RGB_LED_COUNT, RGB_LED_PIN, NEO_RGB + NEO_KHZ800);
 
 void setup() {
   displayModule.begin();
-  displayModule.renderLogo();
+  displayModule.renderLowBattery();
   displayModule.hibernate();
 
   rgbLed.begin();
