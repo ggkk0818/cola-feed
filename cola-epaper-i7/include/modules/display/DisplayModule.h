@@ -9,8 +9,9 @@ class DisplayModule {
   DisplayModule();
 
   void begin();
-    void renderLowBattery();
+  void renderLowBattery();
   void renderLogo();
+  void renderFontCN32Test();
   void hibernate();
 
  private:
