@@ -3,7 +3,7 @@
 #include <Adafruit_GFX.h>
 #include <SPI.h>
 
-#include "modules/display/BatteryImage64x64.h"
+#include "modules/display/BatteryImage128x128.h"
 #include "modules/display/LogoImage64x64.h"
 
 namespace {
@@ -117,16 +117,17 @@ void DisplayModule::begin() {
 }
 
 void DisplayModule::renderLowBattery() {
-  const int16_t imageX = (display_.width() - static_cast<int16_t>(BatteryImage64x64::kWidth)) / 2;
+    const int16_t imageX = (display_.width() - static_cast<int16_t>(BatteryImage128x128::kWidth)) / 2;
   const int16_t imageY =
-      (display_.height() - static_cast<int16_t>(BatteryImage64x64::kHeight)) / 2;
+      (display_.height() - static_cast<int16_t>(BatteryImage128x128::kHeight)) / 2;
 
   display_.setFullWindow();
   display_.firstPage();
   do {
     display_.fillScreen(GxEPD_WHITE);
-    display_.drawBitmap(imageX, imageY, BatteryImage64x64::kBitmap, BatteryImage64x64::kWidth,
-                        BatteryImage64x64::kHeight, GxEPD_BLACK);
+    display_.drawBitmap(imageX, imageY, BatteryImage128x128::kBitmap,
+              BatteryImage128x128::kWidth, BatteryImage128x128::kHeight,
+              GxEPD_BLACK);
   } while (display_.nextPage());
 
   hibernate();
