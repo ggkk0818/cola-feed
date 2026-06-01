@@ -9,6 +9,38 @@
 
 namespace {
 
+bool isAsciiVisibleCodePoint(uint32_t codePoint) {
+  return codePoint >= 0x21u && codePoint <= 0x7Eu;
+}
+
+int16_t extraSpacingForFace(const BitmapFont::Face* face) {
+  if (face == &FontCN16::kFace) {
+    return 2;
+  }
+
+  if (face == &FontCN32::kFace) {
+    return 4;
+  }
+
+  return 0;
+}
+
+int16_t extraSpacingForCodePoint(const BitmapFont::Face* face,
+                                const BitmapFont::Glyph* glyph,
+                                uint32_t codePoint) {
+  if (face == nullptr || glyph == nullptr || !isAsciiVisibleCodePoint(codePoint)) {
+    return 0;
+  }
+
+  return extraSpacingForFace(face);
+}
+
+int16_t leadingSpacingForCodePoint(const BitmapFont::Face* face,
+                                   const BitmapFont::Glyph* glyph,
+                                   uint32_t codePoint) {
+  return extraSpacingForCodePoint(face, glyph, codePoint) / 2;
+}
+
 BitmapFontRenderer createRenderer(DisplayDriver& display, const BitmapFont::Face& face,
                                   uint8_t bytesPerRow, BitmapFont::FindGlyphFn findGlyph) {
   BitmapFontRenderer fonts(display, face, bytesPerRow, findGlyph);
@@ -179,7 +211,7 @@ int16_t BitmapFontRenderer::advanceForCodePoint(uint32_t codePoint) const {
 
   const BitmapFont::Glyph* glyph = findGlyph(codePoint);
   if (glyph != nullptr && glyph->advance > 0) {
-    return glyph->advance;
+    return glyph->advance + extraSpacingForCodePoint(face_, glyph, codePoint);
   }
 
   return face_->glyphAdvance;
@@ -193,6 +225,7 @@ void BitmapFontRenderer::drawCodePoint(uint32_t codePoint, int16_t x, int16_t ba
   const int16_t glyphTopY = baselineY - face_->ascent;
   const BitmapFont::Glyph* glyph = findGlyph(codePoint);
   const int16_t glyphWidth = advanceForCodePoint(codePoint);
+  const int16_t glyphX = x + leadingSpacingForCodePoint(face_, glyph, codePoint);
 
   if (!transparentBackground_) {
     display_->fillRect(x, glyphTopY, glyphWidth, face_->glyphHeight, backgroundColor_);
@@ -217,7 +250,7 @@ void BitmapFontRenderer::drawCodePoint(uint32_t codePoint, int16_t x, int16_t ba
           continue;
         }
 
-        display_->drawPixel(x + sourceX - glyph->xOffset, glyphTopY + yIndex,
+        display_->drawPixel(glyphX + sourceX - glyph->xOffset, glyphTopY + yIndex,
                             foregroundColor_);
       }
     }
