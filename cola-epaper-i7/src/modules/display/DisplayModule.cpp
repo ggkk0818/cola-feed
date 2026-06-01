@@ -14,6 +14,10 @@ constexpr uint8_t EPD_CS_PIN = 4;
 constexpr uint8_t EPD_RST_PIN = 23;
 constexpr uint8_t EPD_DC_PIN = 5;
 constexpr uint8_t EPD_BUSY_PIN = 24;
+constexpr int16_t kMainPageTopHeight = 120;
+constexpr int16_t kMainPageSidebarWidth = 300;
+constexpr int16_t kMainPageBorderThickness = 2;
+constexpr uint8_t kMainPageMaxConsecutivePartialRefreshes = 5;
 }  // namespace
 
 DisplayModule::DisplayModule()
@@ -26,6 +30,221 @@ void DisplayModule::begin() {
   display_.init(0);
   display_.setRotation(0);
   display_.setFullWindow();
+}
+
+void DisplayModule::renderMainPage() {
+  if (shouldRenderMainPageFullRefresh()) {
+    renderMainPageFullRefresh();
+    resetMainPageRegionStateAfterFullRefresh();
+    hasRenderedMainPage_ = true;
+    hibernate();
+    return;
+  }
+
+  const MainPageRegion regions[] = {
+      MainPageRegion::kTop,
+      MainPageRegion::kSidebar,
+      MainPageRegion::kContent,
+  };
+
+  bool renderedAnyRegion = false;
+  for (MainPageRegion region : regions) {
+    if (!shouldRenderMainPageRegion(region)) {
+      continue;
+    }
+
+    renderMainPagePartialRefresh(region);
+    updateMainPageRegionStateAfterRefresh(region, false);
+    renderedAnyRegion = true;
+  }
+
+  if (renderedAnyRegion) {
+    hasRenderedMainPage_ = true;
+    hibernate();
+  }
+}
+
+DisplayModule::MainPageRegionBounds DisplayModule::getMainPageTopBounds() const {
+  return MainPageRegionBounds{0, 0, static_cast<int16_t>(display_.width()),
+                              kMainPageTopHeight};
+}
+
+DisplayModule::MainPageRegionBounds DisplayModule::getMainPageSidebarBounds() const {
+  return MainPageRegionBounds{0, kMainPageTopHeight, kMainPageSidebarWidth,
+                              static_cast<int16_t>(display_.height() - kMainPageTopHeight)};
+}
+
+DisplayModule::MainPageRegionBounds DisplayModule::getMainPageContentBounds() const {
+  return MainPageRegionBounds{kMainPageSidebarWidth, kMainPageTopHeight,
+                              static_cast<int16_t>(display_.width() - kMainPageSidebarWidth),
+                              static_cast<int16_t>(display_.height() - kMainPageTopHeight)};
+}
+
+DisplayModule::MainPageRegionBounds DisplayModule::getMainPageRegionBounds(
+    MainPageRegion region) const {
+  switch (region) {
+    case MainPageRegion::kTop:
+      return getMainPageTopBounds();
+    case MainPageRegion::kSidebar:
+      return getMainPageSidebarBounds();
+    case MainPageRegion::kContent:
+      return getMainPageContentBounds();
+  }
+
+  return getMainPageContentBounds();
+}
+
+DisplayModule::MainPageRegionState& DisplayModule::getMainPageRegionState(
+    MainPageRegion region) {
+  switch (region) {
+    case MainPageRegion::kTop:
+      return mainPageTopState_;
+    case MainPageRegion::kSidebar:
+      return mainPageSidebarState_;
+    case MainPageRegion::kContent:
+      return mainPageContentState_;
+  }
+
+  return mainPageContentState_;
+}
+
+const DisplayModule::MainPageRegionState& DisplayModule::getMainPageRegionState(
+    MainPageRegion region) const {
+  switch (region) {
+    case MainPageRegion::kTop:
+      return mainPageTopState_;
+    case MainPageRegion::kSidebar:
+      return mainPageSidebarState_;
+    case MainPageRegion::kContent:
+      return mainPageContentState_;
+  }
+
+  return mainPageContentState_;
+}
+
+bool DisplayModule::shouldRenderMainPageFullRefresh() const {
+  if (!hasRenderedMainPage_) {
+    return true;
+  }
+
+  const MainPageRegion regions[] = {
+      MainPageRegion::kTop,
+      MainPageRegion::kSidebar,
+      MainPageRegion::kContent,
+  };
+
+  for (MainPageRegion region : regions) {
+    const MainPageRegionState& state = getMainPageRegionState(region);
+    if (!state.dirty) {
+      continue;
+    }
+
+    if (state.consecutivePartialRefreshes >= kMainPageMaxConsecutivePartialRefreshes ||
+        state.containsRed || state.willDrawRed) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool DisplayModule::shouldRenderMainPageRegion(MainPageRegion region) const {
+  return getMainPageRegionState(region).dirty;
+}
+
+void DisplayModule::renderMainPageFullRefresh() {
+  display_.setFullWindow();
+  display_.firstPage();
+  do {
+    renderMainPageRegion(MainPageRegion::kTop);
+    renderMainPageRegion(MainPageRegion::kSidebar);
+    renderMainPageRegion(MainPageRegion::kContent);
+    renderMainPageLayout();
+  } while (display_.nextPage());
+}
+
+void DisplayModule::renderMainPagePartialRefresh(MainPageRegion region) {
+  const MainPageRegionBounds bounds = getMainPageRegionBounds(region);
+
+  display_.setPartialWindow(bounds.x, bounds.y, bounds.width, bounds.height);
+  display_.firstPage();
+  do {
+    renderMainPageRegion(region);
+    renderMainPageLayout();
+  } while (display_.nextPage());
+}
+
+void DisplayModule::renderMainPageLayout() {
+  const MainPageRegionBounds topBounds = getMainPageTopBounds();
+  const MainPageRegionBounds sidebarBounds = getMainPageSidebarBounds();
+
+  display_.fillRect(topBounds.x,
+                    topBounds.y + topBounds.height - kMainPageBorderThickness,
+                    topBounds.width, kMainPageBorderThickness, GxEPD_BLACK);
+  display_.fillRect(sidebarBounds.x + sidebarBounds.width - kMainPageBorderThickness,
+                    sidebarBounds.y, kMainPageBorderThickness, sidebarBounds.height,
+                    GxEPD_BLACK);
+}
+
+void DisplayModule::renderMainPageRegion(MainPageRegion region) {
+  const MainPageRegionBounds bounds = getMainPageRegionBounds(region);
+
+  switch (region) {
+    case MainPageRegion::kTop:
+      renderMainPageTopRegion(bounds);
+      return;
+    case MainPageRegion::kSidebar:
+      renderMainPageSidebarRegion(bounds);
+      return;
+    case MainPageRegion::kContent:
+      renderMainPageContentRegion(bounds);
+      return;
+  }
+}
+
+void DisplayModule::renderMainPageTopRegion(const MainPageRegionBounds& bounds) {
+  display_.fillRect(bounds.x, bounds.y, bounds.width, bounds.height, GxEPD_WHITE);
+
+  // TODO: Render the top bar content.
+}
+
+void DisplayModule::renderMainPageSidebarRegion(const MainPageRegionBounds& bounds) {
+  display_.fillRect(bounds.x, bounds.y, bounds.width, bounds.height, GxEPD_WHITE);
+
+  // TODO: Render the left sidebar content.
+}
+
+void DisplayModule::renderMainPageContentRegion(const MainPageRegionBounds& bounds) {
+  display_.fillRect(bounds.x, bounds.y, bounds.width, bounds.height, GxEPD_WHITE);
+
+  // TODO: Render the main content area.
+}
+
+void DisplayModule::updateMainPageRegionStateAfterRefresh(MainPageRegion region,
+                                                          bool fullRefresh) {
+  MainPageRegionState& state = getMainPageRegionState(region);
+
+  if (fullRefresh) {
+    state.consecutivePartialRefreshes = 0;
+  } else if (state.consecutivePartialRefreshes < 0xFF) {
+    ++state.consecutivePartialRefreshes;
+  }
+
+  state.containsRed = state.willDrawRed;
+  state.willDrawRed = false;
+  state.dirty = false;
+}
+
+void DisplayModule::resetMainPageRegionStateAfterFullRefresh() {
+  const MainPageRegion regions[] = {
+      MainPageRegion::kTop,
+      MainPageRegion::kSidebar,
+      MainPageRegion::kContent,
+  };
+
+  for (MainPageRegion region : regions) {
+    updateMainPageRegionStateAfterRefresh(region, true);
+  }
 }
 
 void DisplayModule::renderLowBattery() {
@@ -75,7 +294,7 @@ void DisplayModule::renderLogo() {
 }
 
 void DisplayModule::renderFontCN16Test() {
-  static constexpr char kTestText[] = "这也是中国人有时";
+  static constexpr char kTestText[] = "温！湿度23:15晴AB吃cd奶时!间";
   display_.setFullWindow();
 
   auto bitmapFonts = createFontCN16Renderer(display_);
@@ -92,7 +311,7 @@ void DisplayModule::renderFontCN16Test() {
 }
 
 void DisplayModule::renderFontCN32Test() {
-  static constexpr char kTestText[] = "温！湿度23晴AB吃cd奶时!间";
+  static constexpr char kTestText[] = "温！湿度23:15晴AB吃cd奶时!间";
   display_.setFullWindow();
 
   auto bitmapFonts = createFontCN32Renderer(display_);
