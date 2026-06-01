@@ -5,10 +5,10 @@
 
 #include "modules/display/BitmapFontTypes.h"
 
-namespace FontCN32 {
+namespace FontCN16 {
 
-constexpr uint8_t kGlyphWidth = 48;
-constexpr uint8_t kGlyphHeight = 62;
+constexpr uint8_t kGlyphWidth = 24;
+constexpr uint8_t kGlyphHeight = 30;
 constexpr uint8_t kBytesPerRow = kGlyphWidth / 8;
 constexpr uint16_t kBytesPerGlyph = kBytesPerRow * kGlyphHeight;
 constexpr int16_t kGlyphAscent = kGlyphHeight;
@@ -25,4 +25,4 @@ extern const size_t kGlyphCount;
 
 const Glyph* findGlyph(uint32_t codePoint);
 
-}  // namespace FontCN32
+}  // namespace FontCN16
