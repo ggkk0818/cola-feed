@@ -25,15 +25,7 @@ void DisplayModule::begin() {
 
   display_.init(0);
   display_.setRotation(0);
-  display_.setTextColor(GxEPD_BLACK);
-  display_.setTextSize(2);
   display_.setFullWindow();
-
-  fonts_.begin(display_);
-  fonts_.setFontMode(1);
-  fonts_.setForegroundColor(GxEPD_BLACK);
-  fonts_.setBackgroundColor(GxEPD_WHITE);
-  fonts_.setFont(u8g2_font_wqy16_t_gb2312);
 }
 
 void DisplayModule::renderLowBattery() {
@@ -76,26 +68,8 @@ void DisplayModule::renderLogo() {
     display_.drawBitmap(imageX, imageY, LogoImage64x64::kBitmap, LogoImage64x64::kWidth,
                         LogoImage64x64::kHeight, GxEPD_RED);
 
-    fonts_.setFont(u8g2_font_logisoso32_tf);
-    const int16_t largeFontAscent = fonts_.getFontAscent();
-    const int16_t largeFontDescent = fonts_.getFontDescent();
-    const int16_t largeTextWidth = fonts_.getUTF8Width(logoText);
-    const int16_t largeTextHeight = largeFontAscent - largeFontDescent;
-    const bool canUseLargeFont =
-        (largeTextWidth > 0) && (largeTextHeight > 0) && (largeTextWidth <= display_.width());
-
-    if (canUseLargeFont) {
-      const int16_t textX = centerX - (largeTextWidth / 2);
-      const int16_t textBaselineY =
-          logoTextCenterY + ((largeFontAscent + largeFontDescent) / 2);
-      fonts_.setCursor(textX, textBaselineY);
-      fonts_.print(logoText);
-    } else {
-      drawCenterBitmapText(bitmapFonts, logoTextStr, centerX, logoTextCenterY);
-    }
+    drawCenterBitmapText(bitmapFonts, logoTextStr, centerX, logoTextCenterY);
   } while (display_.nextPage());
-
-  fonts_.setFont(u8g2_font_wqy16_t_gb2312);
 
   hibernate();
 }

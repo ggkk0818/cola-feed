@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Arduino.h>
-#include <U8g2_for_Adafruit_GFX.h>
 
 #include "modules/display/DisplayDriver.h"
 
@@ -18,5 +17,4 @@ class DisplayModule {
 
  private:
   DisplayDriver display_;
-  U8G2_FOR_ADAFRUIT_GFX fonts_;
 };
