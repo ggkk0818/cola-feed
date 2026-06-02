@@ -19,7 +19,10 @@ class BleMeshModule {
   void begin();
   void loop();
   void handleWifiStateChange(WifiProvisioningModule::ConnectionState state);
-  bool replaceFeedCache(const String& serverTime, const std::vector<FeedRecord>& records);
+  bool replaceFeedCache(const String& serverTime,
+                        const std::vector<FeedRecord>& records,
+                        const String& weatherDataJson,
+                        bool weatherDataIsNull);
 
   // Internal callback entry points used by BLE adapter callbacks.
   void onClientConnected();
@@ -27,6 +30,14 @@ class BleMeshModule {
   void onClientBroadcast(const String& payload);
 
  private:
+  struct FeedSyncCache {
+    String sourceServerTime;
+    uint32_t receivedAtMs = 0;
+    std::vector<FeedRecord> records;
+    String weatherDataJson;
+    bool weatherDataIsNull = true;
+  };
+
   void startMesh();
   void stopMesh();
 
@@ -46,6 +57,5 @@ class BleMeshModule {
   bool restartAdvertisingPending_ = false;
   uint16_t clientCount_ = 0;
 
-  String serverTimeCache_;
-  std::vector<FeedRecord> feedRecordsCache_;
+  FeedSyncCache feedCache_;
 };

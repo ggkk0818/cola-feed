@@ -476,8 +476,14 @@ void WifiProvisioningModule::handleFeedDataPut() {
 
   JsonVariant serverTimeVar = requestDoc["serverTime"];
   JsonVariant recordsVar = requestDoc["records"];
+  JsonVariant weatherDataVar = requestDoc["weatherData"];
   if (!serverTimeVar.is<const char*>() || !recordsVar.is<JsonArray>()) {
     sendJsonError(400, "serverTime must be string and records must be array");
+    return;
+  }
+
+  if (!weatherDataVar.isNull() && !weatherDataVar.is<JsonObject>()) {
+    sendJsonError(400, "weatherData must be object or null");
     return;
   }
 
@@ -485,6 +491,12 @@ void WifiProvisioningModule::handleFeedDataPut() {
   if (!isDateTimeFormatValid(serverTime)) {
     sendJsonError(400, "invalid serverTime format");
     return;
+  }
+
+  String weatherDataJson;
+  const bool weatherDataIsNull = weatherDataVar.isNull();
+  if (!weatherDataIsNull) {
+    serializeJson(weatherDataVar, weatherDataJson);
   }
 
   JsonArray records = recordsVar.as<JsonArray>();
@@ -517,7 +529,7 @@ void WifiProvisioningModule::handleFeedDataPut() {
     parsedRecords.push_back(record);
   }
 
-  if (!bleMesh_->replaceFeedCache(serverTime, parsedRecords)) {
+  if (!bleMesh_->replaceFeedCache(serverTime, parsedRecords, weatherDataJson, weatherDataIsNull)) {
     sendJsonError(500, "failed to update feed cache");
     return;
   }
