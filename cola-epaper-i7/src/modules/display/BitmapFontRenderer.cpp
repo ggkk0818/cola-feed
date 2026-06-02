@@ -7,6 +7,8 @@
 #include "modules/display/FontCN12.h"
 #include "modules/display/FontCN16.h"
 #include "modules/display/FontCN32.h"
+#include "modules/display/FontCN64.h"
+#include "modules/display/FontCN96.h"
 
 namespace {
 
@@ -272,6 +274,14 @@ BitmapFontRenderer createFontCN12Renderer(DisplayDriver& display) {
 
 BitmapFontRenderer createFontCN32Renderer(DisplayDriver& display) {
   return createRenderer(display, FontCN32::kFace, FontCN32::kBytesPerRow, FontCN32::findGlyph);
+}
+
+BitmapFontRenderer createFontCN64Renderer(DisplayDriver& display) {
+  return createRenderer(display, FontCN64::kFace, FontCN64::kBytesPerRow, FontCN64::findGlyph);
+}
+
+BitmapFontRenderer createFontCN96Renderer(DisplayDriver& display) {
+  return createRenderer(display, FontCN96::kFace, FontCN96::kBytesPerRow, FontCN96::findGlyph);
 }
 
 void drawCenterBitmapText(BitmapFontRenderer& fonts, const String& text, int16_t centerX,
