@@ -31,7 +31,11 @@ constexpr uint8_t kMainPageMaxConsecutivePartialRefreshes = 5;
 constexpr int16_t kMainPageSidebarPadding = 5;
 constexpr int16_t kMainPageSidebarDashLength = 4;
 constexpr int16_t kMainPageSidebarDashGap = 4;
+constexpr int16_t kMainPageContentTextEdgeOffset = 25;
 constexpr char kMainPageTopTimeText[] = "12:00";
+constexpr char kMainPageContentTitleText[] = "距离上次吃奶";
+constexpr char kMainPageContentDurationText[] = "2H 15M";
+constexpr char kMainPageContentTimestampText[] = "2026-06-02 15:59:02";
 
 struct BitmapAsset {
   const uint8_t* bitmap;
@@ -623,7 +627,25 @@ void DisplayModule::renderMainPageSidebarForecastRegion(const MainPageRegionBoun
 void DisplayModule::renderMainPageContentRegion(const MainPageRegionBounds& bounds) {
   display_.fillRect(bounds.x, bounds.y, bounds.width, bounds.height, GxEPD_WHITE);
 
-  // TODO: Render the main content area.
+  auto headerFonts = createFontCN32Renderer(display_);
+  auto durationFonts = createFontCN96Renderer(display_);
+  auto footerFonts = createFontCN32Renderer(display_);
+
+  const int16_t centerX = bounds.x + (bounds.width / 2);
+  const int16_t centerY = bounds.y + (bounds.height / 2);
+  const int16_t headerHeight =
+      headerFonts.getFontAscent() - headerFonts.getFontDescent();
+  const int16_t footerHeight =
+      footerFonts.getFontAscent() - footerFonts.getFontDescent();
+  const int16_t headerCenterY =
+      bounds.y + kMainPageContentTextEdgeOffset + (headerHeight / 2);
+  const int16_t footerCenterY = bounds.y + bounds.height - kMainPageContentTextEdgeOffset -
+                                (footerHeight / 2);
+
+  drawCenterBitmapText(headerFonts, String(kMainPageContentTitleText), centerX, headerCenterY);
+  drawCenterBitmapText(durationFonts, String(kMainPageContentDurationText), centerX, centerY);
+  drawCenterBitmapText(footerFonts, String(kMainPageContentTimestampText), centerX,
+                       footerCenterY);
 }
 
 void DisplayModule::updateMainPageRegionStateAfterRefresh(MainPageRegion region,
