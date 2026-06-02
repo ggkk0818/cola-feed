@@ -308,21 +308,35 @@ void BleMeshModule::onClientDisconnected() {
 
 void BleMeshModule::onClientBroadcast(const String& payload) {
   if (!meshRunning_ || feedDataCharacteristic_ == nullptr) {
+    Serial.printf("[BLE] Broadcast ignored: meshRunning=%d, feedCharReady=%d\n",
+                  meshRunning_ ? 1 : 0,
+                  feedDataCharacteristic_ != nullptr ? 1 : 0);
     return;
   }
 
+  Serial.printf("[BLE] Broadcast received: length=%u, payload=%s\n",
+                static_cast<unsigned>(payload.length()),
+                payload.c_str());
+
   DynamicJsonDocument requestDoc(512);
   const DeserializationError parseError = deserializeJson(requestDoc, payload);
+  if (parseError) {
+    Serial.printf("[BLE] Broadcast JSON parse failed: %s\n", parseError.c_str());
+  }
   if (!parseError) {
     const String deviceName = String(requestDoc["device_name"] | "");
+    Serial.printf("[BLE] Broadcast device_name=%s\n", deviceName.c_str());
     if (!deviceName.isEmpty() && deviceName != "Cola-ePaper") {
+      Serial.printf("[BLE] Broadcast ignored for device_name=%s\n", deviceName.c_str());
       return;
     }
   }
 
   const String feedPayload = buildFeedPayloadJson();
+  Serial.printf("[BLE] Notify feed payload: length=%u\n", static_cast<unsigned>(feedPayload.length()));
   feedDataCharacteristic_->setValue(feedPayload.c_str());
   feedDataCharacteristic_->notify();
+  Serial.println("[BLE] Feed payload notified.");
 }
 
 void BleMeshModule::updateScreen() const {

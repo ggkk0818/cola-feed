@@ -446,30 +446,41 @@ void WifiProvisioningModule::handleWifiConnect() {
 }
 
 void WifiProvisioningModule::handleFeedDataPut() {
+  Serial.println("[HTTP] PUT /api/feedData received.");
+
   if (provisioningModeActive_ || !isConnected()) {
+    Serial.printf("[HTTP] feedData rejected: provisioningModeActive=%d, connected=%d\n",
+                  provisioningModeActive_ ? 1 : 0,
+                  isConnected() ? 1 : 0);
     sendJsonError(503, "feedData endpoint unavailable while not connected");
     return;
   }
 
   if (bleMesh_ == nullptr) {
+    Serial.println("[HTTP] feedData rejected: ble module is not ready.");
     sendJsonError(500, "ble module is not ready");
     return;
   }
 
   if (!webServer_.hasArg("plain")) {
+    Serial.println("[HTTP] feedData rejected: missing request body.");
     sendJsonError(400, "missing request body");
     return;
   }
 
   const String requestBody = webServer_.arg("plain");
   if (requestBody.isEmpty()) {
+    Serial.println("[HTTP] feedData rejected: empty request body.");
     sendJsonError(400, "empty request body");
     return;
   }
 
+  Serial.printf("[HTTP] feedData body length=%u\n", static_cast<unsigned>(requestBody.length()));
+
   DynamicJsonDocument requestDoc(8192);
   const DeserializationError parseError = deserializeJson(requestDoc, requestBody);
   if (parseError) {
+    Serial.printf("[HTTP] feedData JSON parse failed: %s\n", parseError.c_str());
     sendJsonError(400, "invalid json body");
     return;
   }
@@ -478,17 +489,20 @@ void WifiProvisioningModule::handleFeedDataPut() {
   JsonVariant recordsVar = requestDoc["records"];
   JsonVariant weatherDataVar = requestDoc["weatherData"];
   if (!serverTimeVar.is<const char*>() || !recordsVar.is<JsonArray>()) {
+    Serial.println("[HTTP] feedData rejected: serverTime/records types invalid.");
     sendJsonError(400, "serverTime must be string and records must be array");
     return;
   }
 
   if (!weatherDataVar.isNull() && !weatherDataVar.is<JsonObject>()) {
+    Serial.println("[HTTP] feedData rejected: weatherData type invalid.");
     sendJsonError(400, "weatherData must be object or null");
     return;
   }
 
   const String serverTime = String(serverTimeVar.as<const char*>());
   if (!isDateTimeFormatValid(serverTime)) {
+    Serial.printf("[HTTP] feedData rejected: invalid serverTime=%s\n", serverTime.c_str());
     sendJsonError(400, "invalid serverTime format");
     return;
   }
@@ -499,9 +513,15 @@ void WifiProvisioningModule::handleFeedDataPut() {
     serializeJson(weatherDataVar, weatherDataJson);
   }
 
+  Serial.printf("[HTTP] feedData parsed: serverTime=%s, weatherDataIsNull=%d\n",
+                serverTime.c_str(),
+                weatherDataIsNull ? 1 : 0);
+
   JsonArray records = recordsVar.as<JsonArray>();
   std::vector<FeedRecord> parsedRecords;
   parsedRecords.reserve(records.size());
+
+  Serial.printf("[HTTP] feedData records count=%u\n", static_cast<unsigned>(records.size()));
 
   for (JsonObject recordObj : records) {
     JsonVariant idVar = recordObj["id"];
@@ -511,6 +531,7 @@ void WifiProvisioningModule::handleFeedDataPut() {
 
     if (!idVar.is<const char*>() || !startTimeVar.is<const char*>() ||
         !endTimeVar.is<const char*>() || !durationVar.is<long>()) {
+      Serial.println("[HTTP] feedData rejected: record field types invalid.");
       sendJsonError(400, "record fields are invalid");
       return;
     }
@@ -522,6 +543,10 @@ void WifiProvisioningModule::handleFeedDataPut() {
     record.duration = durationVar.as<long>();
 
     if (record.id.length() != 32 || record.endTime.isEmpty() || record.duration < 0) {
+      Serial.printf("[HTTP] feedData rejected: record constraint failed for id=%s, endTime=%s, duration=%ld\n",
+                    record.id.c_str(),
+                    record.endTime.c_str(),
+                    record.duration);
       sendJsonError(400, "record value constraints failed");
       return;
     }
@@ -530,9 +555,14 @@ void WifiProvisioningModule::handleFeedDataPut() {
   }
 
   if (!bleMesh_->replaceFeedCache(serverTime, parsedRecords, weatherDataJson, weatherDataIsNull)) {
+    Serial.println("[HTTP] feedData failed: replaceFeedCache returned false.");
     sendJsonError(500, "failed to update feed cache");
     return;
   }
+
+  Serial.printf("[HTTP] feedData saved: records=%u, serverTime=%s\n",
+                static_cast<unsigned>(parsedRecords.size()),
+                serverTime.c_str());
 
   DynamicJsonDocument responseDoc(512);
   responseDoc["code"] = 200;
