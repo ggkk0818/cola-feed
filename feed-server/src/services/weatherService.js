@@ -94,7 +94,7 @@ class WeatherService {
   }
 
   fetchThreeDayWeather() {
-    return this.getJson('/v7/weather/3d', {
+    return this.getJson('/v7/weather/7d', {
       location: this.locationId,
     });
   }
