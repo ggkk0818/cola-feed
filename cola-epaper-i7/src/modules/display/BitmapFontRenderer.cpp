@@ -6,6 +6,7 @@
 
 #include "modules/display/FontCN12.h"
 #include "modules/display/FontCN16.h"
+#include "modules/display/FontCN24.h"
 #include "modules/display/FontCN32.h"
 #include "modules/display/FontCN64.h"
 #include "modules/display/FontCN96.h"
@@ -23,6 +24,10 @@ int16_t extraSpacingForFace(const BitmapFont::Face* face) {
 
   if (face == &FontCN16::kFace) {
     return 2;
+  }
+
+  if (face == &FontCN24::kFace) {
+    return 3;
   }
 
   if (face == &FontCN32::kFace) {
@@ -295,6 +300,10 @@ BitmapFontRenderer createFontCN16Renderer(DisplayDriver& display) {
 
 BitmapFontRenderer createFontCN12Renderer(DisplayDriver& display) {
   return createRenderer(display, FontCN12::kFace, FontCN12::kBytesPerRow, FontCN12::findGlyph);
+}
+
+BitmapFontRenderer createFontCN24Renderer(DisplayDriver& display) {
+  return createRenderer(display, FontCN24::kFace, FontCN24::kBytesPerRow, FontCN24::findGlyph);
 }
 
 BitmapFontRenderer createFontCN32Renderer(DisplayDriver& display) {

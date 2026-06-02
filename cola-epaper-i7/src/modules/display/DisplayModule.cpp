@@ -57,7 +57,7 @@ struct BitmapAsset {
 
 WeatherData::SidebarWeatherData createMockSidebarWeatherData() {
   WeatherData::SidebarWeatherData data;
-  data.outdoor.temp = "26.1";
+  data.outdoor.temp = "26";
   data.outdoor.icon = 100;
   data.outdoor.text = "晴";
   data.indoor.temp = "26.1";
@@ -625,10 +625,10 @@ void DisplayModule::renderMainPageSidebarOutdoorRegion(const MainPageRegionBound
   display_.fillRect(bounds.x, bounds.y, bounds.width, bounds.height, GxEPD_WHITE);
 
   auto labelFonts = createFontCN12Renderer(display_);
-  auto valueFonts = createFontCN32Renderer(display_);
+  auto valueFonts = createFontCN24Renderer(display_);
 
   drawLeftBitmapText(labelFonts, String("室外"), bounds.x + 5, bounds.y + 15);
-  drawWeatherIcon(display_, bounds.x + 5, bounds.y + 43, sidebarWeatherData_.outdoor.icon);
+  drawWeatherIcon(display_, bounds.x + 5, bounds.y + 35, sidebarWeatherData_.outdoor.icon);
   drawLeftBitmapText(labelFonts, sidebarWeatherData_.outdoor.text, bounds.x + 74, bounds.y + 45);
   drawLeftBitmapText(valueFonts, formatTemperatureValue(sidebarWeatherData_.outdoor.temp),
                      bounds.x + 74, bounds.y + 75);
@@ -647,7 +647,7 @@ void DisplayModule::renderMainPageSidebarIndoorRegion(const MainPageRegionBounds
   display_.fillRect(bounds.x, bounds.y, bounds.width, bounds.height, GxEPD_WHITE);
 
   auto labelFonts = createFontCN12Renderer(display_);
-  auto valueFonts = createFontCN32Renderer(display_);
+  auto valueFonts = createFontCN24Renderer(display_);
 
   drawLeftBitmapText(labelFonts, String("室内"), bounds.x + 5, bounds.y + 15);
   display_.drawBitmap(bounds.x + 5, bounds.y + 38, TemperatureImage32x32::kBitmap,
@@ -687,7 +687,7 @@ void DisplayModule::renderMainPageSidebarForecastRegion(const MainPageRegionBoun
     const WeatherData::DailyForecastData& forecast = sidebarWeatherData_.forecast[index];
 
     drawLeftBitmapText(labelFonts, formatForecastTitle(index, forecast), grid.x + 5, grid.y + 15);
-    drawWeatherIcon(display_, grid.x + 5, grid.y + 43, forecast.iconDay);
+    drawWeatherIcon(display_, grid.x + 5, grid.y + 35, forecast.iconDay);
     drawLeftBitmapText(labelFonts, forecast.textDay, grid.x + 74, grid.y + 43);
     drawLeftBitmapText(labelFonts, formatForecastTemperatureRange(forecast), grid.x + 74,
                        grid.y + 63);

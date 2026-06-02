@@ -47,6 +47,7 @@ class BitmapFontRenderer {
 
 BitmapFontRenderer createFontCN16Renderer(DisplayDriver& display);
 BitmapFontRenderer createFontCN12Renderer(DisplayDriver& display);
+BitmapFontRenderer createFontCN24Renderer(DisplayDriver& display);
 BitmapFontRenderer createFontCN32Renderer(DisplayDriver& display);
 BitmapFontRenderer createFontCN64Renderer(DisplayDriver& display);
 BitmapFontRenderer createFontCN96Renderer(DisplayDriver& display);
