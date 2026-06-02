@@ -5,10 +5,10 @@
 
 #include "modules/display/BatteryImage128x128.h"
 #include "modules/display/BitmapFontRenderer.h"
-#include "modules/display/ChargingImage16x16.h"
+#include "modules/display/ChargingImage24x24.h"
 #include "modules/display/HumidityImage32x32.h"
 #include "modules/display/LogoImage64x64.h"
-#include "modules/display/PowerImage16x16.h"
+#include "modules/display/PowerImage24x24.h"
 #include "modules/display/TemperatureImage32x32.h"
 #include "modules/display/weather-icons/100.h"
 #include "modules/display/weather-icons/101.h"
@@ -34,15 +34,15 @@ constexpr int16_t kMainPageSidebarPadding = 5;
 constexpr int16_t kMainPageSidebarDashLength = 4;
 constexpr int16_t kMainPageSidebarDashGap = 4;
 constexpr int16_t kMainPageContentTextEdgeOffset = 12;
-constexpr int16_t kBatteryStatusIconWidth = 32;
-constexpr int16_t kBatteryStatusIconHeight = 18;
-constexpr int16_t kBatteryStatusHeadWidth = 4;
+constexpr int16_t kBatteryStatusIconWidth = 44;
+constexpr int16_t kBatteryStatusIconHeight = 24;
+constexpr int16_t kBatteryStatusHeadWidth = 5;
 constexpr int16_t kBatteryStatusBodyWidth = kBatteryStatusIconWidth - kBatteryStatusHeadWidth;
-constexpr int16_t kBatteryStatusSegmentGap = 2;
-constexpr int16_t kBatteryStatusInnerPadding = 2;
+constexpr int16_t kBatteryStatusSegmentGap = 3;
+constexpr int16_t kBatteryStatusInnerPadding = 3;
 constexpr int16_t kBatteryStatusTopMargin = 5;
 constexpr int16_t kBatteryStatusRightMargin = 5;
-constexpr int16_t kBatteryStatusAuxIconSize = 16;
+constexpr int16_t kBatteryStatusAuxIconSize = 24;
 constexpr int16_t kBatteryStatusAuxIconGap = 4;
 constexpr char kMainPageTopTimeText[] = "22:00";
 constexpr char kMainPageContentTitleText[] = "距离上次吃奶";
@@ -558,7 +558,7 @@ void DisplayModule::setMainPageForecastData(const WeatherData::DailyForecastData
 
 void DisplayModule::renderBatteryStatusIcon(int16_t x, int16_t y, uint8_t batteryPercentage) {
   const uint8_t segmentCount = resolveBatterySegmentCount(batteryPercentage);
-  const int16_t headHeight = 8;
+  const int16_t headHeight = 10;
   const int16_t headY = y + ((kBatteryStatusIconHeight - headHeight) / 2);
   const int16_t segmentAreaX = x + 1 + kBatteryStatusInnerPadding;
   const int16_t segmentAreaY = y + 1 + kBatteryStatusInnerPadding;
@@ -567,7 +567,7 @@ void DisplayModule::renderBatteryStatusIcon(int16_t x, int16_t y, uint8_t batter
   const int16_t segmentWidth =
       (segmentAreaWidth - (kBatteryStatusSegmentGap * 2)) / 3;
 
-  display_.drawRoundRect(x, y, kBatteryStatusBodyWidth, kBatteryStatusIconHeight, 4,
+  display_.drawRoundRect(x, y, kBatteryStatusBodyWidth, kBatteryStatusIconHeight, 5,
                          GxEPD_BLACK);
   display_.fillRoundRect(x + kBatteryStatusBodyWidth, headY, kBatteryStatusHeadWidth, headHeight,
                          1, GxEPD_BLACK);
@@ -599,15 +599,15 @@ void DisplayModule::renderMainPageTopRegion(const MainPageRegionBounds& bounds) 
   drawCenterBitmapText(bitmapFonts, String(kMainPageTopTimeText), timeCenterX, timeCenterY);
 
   if (mainPageCharging_) {
-    display_.drawBitmap(nextAuxIconX, auxIconY, ChargingImage16x16::kBitmap,
-                        ChargingImage16x16::kWidth, ChargingImage16x16::kHeight,
+    display_.drawBitmap(nextAuxIconX, auxIconY, ChargingImage24x24::kBitmap,
+                        ChargingImage24x24::kWidth, ChargingImage24x24::kHeight,
                         GxEPD_BLACK);
     nextAuxIconX -= kBatteryStatusAuxIconGap + kBatteryStatusAuxIconSize;
   }
 
   if (mainPagePowerConnected_) {
-    display_.drawBitmap(nextAuxIconX, auxIconY, PowerImage16x16::kBitmap,
-                        PowerImage16x16::kWidth, PowerImage16x16::kHeight, GxEPD_BLACK);
+    display_.drawBitmap(nextAuxIconX, auxIconY, PowerImage24x24::kBitmap,
+                        PowerImage24x24::kWidth, PowerImage24x24::kHeight, GxEPD_BLACK);
   }
 
   renderBatteryStatusIcon(batteryIconX, batteryIconY, mainPageBatteryPercentage_);
