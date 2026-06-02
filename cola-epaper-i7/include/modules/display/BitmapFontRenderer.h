@@ -25,7 +25,7 @@ class BitmapFontRenderer {
   size_t print(const char* text);
 
  private:
-  // Decode UTF-8 once here so FontCN16 and FontCN32 traverse text identically.
+  // Decode UTF-8 once here so FontCN12, FontCN16, and FontCN32 traverse text identically.
   static bool readNextCodePoint(const char* text, size_t textLength, size_t& index,
                                 uint32_t& codePoint);
 
@@ -46,6 +46,7 @@ class BitmapFontRenderer {
 };
 
 BitmapFontRenderer createFontCN16Renderer(DisplayDriver& display);
+BitmapFontRenderer createFontCN12Renderer(DisplayDriver& display);
 BitmapFontRenderer createFontCN32Renderer(DisplayDriver& display);
 void drawCenterBitmapText(BitmapFontRenderer& fonts, const String& text, int16_t centerX,
                           int16_t centerY);

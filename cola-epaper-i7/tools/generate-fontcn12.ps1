@@ -1,7 +1,7 @@
 param(
-  [string]$SourcePath = 'C:\Users\ggkk2\Downloads\FontCN16.c',
-  [string]$HeaderPath = 'C:\Code\cola-feed\cola-epaper-i7\include\modules\display\FontCN16.h',
-  [string]$CppPath = 'C:\Code\cola-feed\cola-epaper-i7\src\modules\display\FontCN16.cpp'
+  [string]$SourcePath = 'C:\Users\ggkk2\Downloads\FontCN12.c',
+  [string]$HeaderPath = 'C:\Code\cola-feed\cola-epaper-i7\include\modules\display\FontCN12.h',
+  [string]$CppPath = 'C:\Code\cola-feed\cola-epaper-i7\src\modules\display\FontCN12.cpp'
 )
 
 $lines = Get-Content -Path $SourcePath -Encoding UTF8
@@ -9,8 +9,8 @@ $glyphs = New-Object System.Collections.Generic.List[object]
 $currentChar = $null
 $currentBytes = New-Object System.Collections.Generic.List[string]
 
-$glyphWidth = 24
-$glyphHeight = 30
+$glyphWidth = 16
+$glyphHeight = 21
 $bytesPerRow = $glyphWidth / 8
 
 function Get-GlyphMetrics {
@@ -103,10 +103,10 @@ $header = @'
 
 #include "modules/display/BitmapFontTypes.h"
 
-namespace FontCN16 {
+namespace FontCN12 {
 
-constexpr uint8_t kGlyphWidth = 24;
-constexpr uint8_t kGlyphHeight = 30;
+constexpr uint8_t kGlyphWidth = 16;
+constexpr uint8_t kGlyphHeight = 21;
 constexpr uint8_t kBytesPerRow = kGlyphWidth / 8;
 constexpr uint16_t kBytesPerGlyph = kBytesPerRow * kGlyphHeight;
 constexpr int16_t kGlyphAscent = kGlyphHeight;
@@ -123,20 +123,20 @@ extern const size_t kGlyphCount;
 
 const Glyph* findGlyph(uint32_t codePoint);
 
-}  // namespace FontCN16
+}  // namespace FontCN12
 '@
 Set-Content -Path $HeaderPath -Value $header -Encoding UTF8
 
 $builder = New-Object System.Text.StringBuilder
-[void]$builder.AppendLine('#include "modules/display/FontCN16.h"')
+[void]$builder.AppendLine('#include "modules/display/FontCN12.h"')
 [void]$builder.AppendLine('')
-[void]$builder.AppendLine('namespace FontCN16 {')
+[void]$builder.AppendLine('namespace FontCN12 {')
 [void]$builder.AppendLine('namespace {')
 
 for ($index = 0; $index -lt $glyphs.Count; $index++) {
   $glyph = $glyphs[$index]
-  if ($glyph.Bytes.Count -ne 90) {
-    throw "Glyph $index ($($glyph.Char)) has $($glyph.Bytes.Count) bytes, expected 90."
+  if ($glyph.Bytes.Count -ne 42) {
+    throw "Glyph $index ($($glyph.Char)) has $($glyph.Bytes.Count) bytes, expected 42."
   }
 
   [void]$builder.AppendLine(("const uint8_t glyph{0}[] PROGMEM = {{" -f $index))
@@ -181,7 +181,7 @@ for ($index = 0; $index -lt $glyphs.Count; $index++) {
 [void]$builder.AppendLine('  return nullptr;')
 [void]$builder.AppendLine('}')
 [void]$builder.AppendLine('')
-[void]$builder.AppendLine('}  // namespace FontCN16')
+[void]$builder.AppendLine('}  // namespace FontCN12')
 
 Set-Content -Path $CppPath -Value $builder.ToString() -Encoding UTF8
 

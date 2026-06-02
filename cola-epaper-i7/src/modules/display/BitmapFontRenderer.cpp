@@ -4,6 +4,7 @@
 
 #include <pgmspace.h>
 
+#include "modules/display/FontCN12.h"
 #include "modules/display/FontCN16.h"
 #include "modules/display/FontCN32.h"
 
@@ -14,6 +15,10 @@ bool isAsciiVisibleCodePoint(uint32_t codePoint) {
 }
 
 int16_t extraSpacingForFace(const BitmapFont::Face* face) {
+  if (face == &FontCN12::kFace) {
+    return 1;
+  }
+
   if (face == &FontCN16::kFace) {
     return 2;
   }
@@ -259,6 +264,10 @@ void BitmapFontRenderer::drawCodePoint(uint32_t codePoint, int16_t x, int16_t ba
 
 BitmapFontRenderer createFontCN16Renderer(DisplayDriver& display) {
   return createRenderer(display, FontCN16::kFace, FontCN16::kBytesPerRow, FontCN16::findGlyph);
+}
+
+BitmapFontRenderer createFontCN12Renderer(DisplayDriver& display) {
+  return createRenderer(display, FontCN12::kFace, FontCN12::kBytesPerRow, FontCN12::findGlyph);
 }
 
 BitmapFontRenderer createFontCN32Renderer(DisplayDriver& display) {
