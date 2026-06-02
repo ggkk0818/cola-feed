@@ -57,6 +57,23 @@ BitmapFontRenderer createRenderer(DisplayDriver& display, const BitmapFont::Face
   return fonts;
 }
 
+bool resolveBitmapTextLayout(BitmapFontRenderer& fonts, const String& text, int16_t centerY,
+                             int16_t& textWidth, int16_t& textBaselineY) {
+  if (text.isEmpty()) {
+    return false;
+  }
+
+  const int16_t fontAscent = fonts.getFontAscent();
+  const int16_t fontHeight = fontAscent - fonts.getFontDescent();
+  textWidth = fonts.getUTF8Width(text.c_str());
+  if (fontHeight <= 0 || textWidth <= 0) {
+    return false;
+  }
+
+  textBaselineY = centerY + ((fontAscent + fonts.getFontDescent()) / 2);
+  return true;
+}
+
 }  // namespace
 
 BitmapFontRenderer::BitmapFontRenderer(DisplayDriver& display, const BitmapFont::Face& face,
@@ -284,20 +301,37 @@ BitmapFontRenderer createFontCN96Renderer(DisplayDriver& display) {
   return createRenderer(display, FontCN96::kFace, FontCN96::kBytesPerRow, FontCN96::findGlyph);
 }
 
-void drawCenterBitmapText(BitmapFontRenderer& fonts, const String& text, int16_t centerX,
-                          int16_t centerY) {
-  if (text.isEmpty()) {
+void drawLeftBitmapText(BitmapFontRenderer& fonts, const String& text, int16_t leftX,
+                        int16_t centerY) {
+  int16_t textWidth = 0;
+  int16_t textBaselineY = 0;
+  if (!resolveBitmapTextLayout(fonts, text, centerY, textWidth, textBaselineY)) {
     return;
   }
 
-  const int16_t fontAscent = fonts.getFontAscent();
-  const int16_t fontHeight = fontAscent - fonts.getFontDescent();
-  const int16_t textWidth = fonts.getUTF8Width(text.c_str());
-  if (fontHeight <= 0 || textWidth <= 0) {
+  fonts.drawUTF8(leftX, textBaselineY, text.c_str());
+}
+
+void drawRightBitmapText(BitmapFontRenderer& fonts, const String& text, int16_t rightX,
+                         int16_t centerY) {
+  int16_t textWidth = 0;
+  int16_t textBaselineY = 0;
+  if (!resolveBitmapTextLayout(fonts, text, centerY, textWidth, textBaselineY)) {
+    return;
+  }
+
+  const int16_t textX = rightX - textWidth;
+  fonts.drawUTF8(textX, textBaselineY, text.c_str());
+}
+
+void drawCenterBitmapText(BitmapFontRenderer& fonts, const String& text, int16_t centerX,
+                          int16_t centerY) {
+  int16_t textWidth = 0;
+  int16_t textBaselineY = 0;
+  if (!resolveBitmapTextLayout(fonts, text, centerY, textWidth, textBaselineY)) {
     return;
   }
 
   const int16_t textX = centerX - (textWidth / 2);
-  const int16_t textBaselineY = centerY + ((fontAscent + fonts.getFontDescent()) / 2);
   fonts.drawUTF8(textX, textBaselineY, text.c_str());
 }

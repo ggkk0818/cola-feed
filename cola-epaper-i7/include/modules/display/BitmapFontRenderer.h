@@ -50,5 +50,9 @@ BitmapFontRenderer createFontCN12Renderer(DisplayDriver& display);
 BitmapFontRenderer createFontCN32Renderer(DisplayDriver& display);
 BitmapFontRenderer createFontCN64Renderer(DisplayDriver& display);
 BitmapFontRenderer createFontCN96Renderer(DisplayDriver& display);
+void drawLeftBitmapText(BitmapFontRenderer& fonts, const String& text, int16_t leftX,
+                        int16_t centerY);
+void drawRightBitmapText(BitmapFontRenderer& fonts, const String& text, int16_t rightX,
+                         int16_t centerY);
 void drawCenterBitmapText(BitmapFontRenderer& fonts, const String& text, int16_t centerX,
                           int16_t centerY);
