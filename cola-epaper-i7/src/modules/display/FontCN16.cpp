@@ -5370,7 +5370,7 @@ const Glyph kGlyphs[] = {
   {0x2Fu, glyph436, 0, 8, 9},
   {0x2Eu, glyph437, 1, 3, 4},
   {0x3Au, glyph438, 1, 3, 4},
-  {0xB0u, glyph439, 0, 24, 24},
+  {0xB0u, glyph439, 1, 6, 7},
   {0xFF1Fu, glyph440, 0, 24, 24},
   {0xFF01u, glyph441, 0, 24, 24},
   {0xFF1Au, glyph442, 0, 24, 24},

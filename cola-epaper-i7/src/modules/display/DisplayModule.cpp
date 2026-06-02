@@ -33,7 +33,7 @@ constexpr uint8_t kMainPageMaxConsecutivePartialRefreshes = 5;
 constexpr int16_t kMainPageSidebarPadding = 5;
 constexpr int16_t kMainPageSidebarDashLength = 4;
 constexpr int16_t kMainPageSidebarDashGap = 4;
-constexpr int16_t kMainPageContentTextEdgeOffset = 25;
+constexpr int16_t kMainPageContentTextEdgeOffset = 12;
 constexpr int16_t kBatteryStatusIconWidth = 32;
 constexpr int16_t kBatteryStatusIconHeight = 18;
 constexpr int16_t kBatteryStatusHeadWidth = 4;
@@ -44,9 +44,9 @@ constexpr int16_t kBatteryStatusTopMargin = 5;
 constexpr int16_t kBatteryStatusRightMargin = 5;
 constexpr int16_t kBatteryStatusAuxIconSize = 16;
 constexpr int16_t kBatteryStatusAuxIconGap = 4;
-constexpr char kMainPageTopTimeText[] = "12:00";
+constexpr char kMainPageTopTimeText[] = "22:00";
 constexpr char kMainPageContentTitleText[] = "距离上次吃奶";
-constexpr char kMainPageContentDurationText[] = "2H 15M";
+constexpr char kMainPageContentDurationText[] = "--";
 constexpr char kMainPageContentTimestampText[] = "2026-06-02 15:59:02";
 
 struct BitmapAsset {
@@ -625,11 +625,12 @@ void DisplayModule::renderMainPageSidebarOutdoorRegion(const MainPageRegionBound
   display_.fillRect(bounds.x, bounds.y, bounds.width, bounds.height, GxEPD_WHITE);
 
   auto labelFonts = createFontCN12Renderer(display_);
+  auto textFonts = createFontCN16Renderer(display_);
   auto valueFonts = createFontCN24Renderer(display_);
 
   drawLeftBitmapText(labelFonts, String("室外"), bounds.x + 5, bounds.y + 15);
   drawWeatherIcon(display_, bounds.x + 5, bounds.y + 35, sidebarWeatherData_.outdoor.icon);
-  drawLeftBitmapText(labelFonts, sidebarWeatherData_.outdoor.text, bounds.x + 74, bounds.y + 45);
+  drawLeftBitmapText(textFonts, sidebarWeatherData_.outdoor.text, bounds.x + 74, bounds.y + 45);
   drawLeftBitmapText(valueFonts, formatTemperatureValue(sidebarWeatherData_.outdoor.temp),
                      bounds.x + 74, bounds.y + 75);
 
@@ -688,9 +689,9 @@ void DisplayModule::renderMainPageSidebarForecastRegion(const MainPageRegionBoun
 
     drawLeftBitmapText(labelFonts, formatForecastTitle(index, forecast), grid.x + 5, grid.y + 15);
     drawWeatherIcon(display_, grid.x + 5, grid.y + 35, forecast.iconDay);
-    drawLeftBitmapText(labelFonts, forecast.textDay, grid.x + 74, grid.y + 43);
+    drawLeftBitmapText(labelFonts, forecast.textDay, grid.x + 74, grid.y + 51);
     drawLeftBitmapText(labelFonts, formatForecastTemperatureRange(forecast), grid.x + 74,
-                       grid.y + 63);
+                       grid.y + 71);
   }
 
   const int16_t splitX = bounds.x + kMainPageSidebarPanelWidth - 1;

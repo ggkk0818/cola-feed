@@ -53,6 +53,7 @@ function Get-GlyphMetrics {
   }
 
   $useTrimmedMetrics = ((($CodePoint -ge 0x21) -and ($CodePoint -le 0x7E)) -or
+      $CodePoint -eq 0x00B0 -or
       $CodePoint -eq 0x201C -or $CodePoint -eq 0x201D -or
       $CodePoint -eq 0x3010 -or $CodePoint -eq 0x3011) -and $trimmedWidth -gt 0
 
