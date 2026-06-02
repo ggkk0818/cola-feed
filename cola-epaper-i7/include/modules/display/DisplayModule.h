@@ -11,6 +11,8 @@ class DisplayModule {
 
   void begin();
   void renderMainPage();
+  void setMainPageBatteryStatus(uint8_t batteryPercentage, bool isCharging,
+                                bool isPowerConnected);
   void setMainPageSidebarWeatherData(const WeatherData::SidebarWeatherData& data);
   void setMainPageOutdoorEnvironmentData(const WeatherData::OutdoorEnvironmentData& data);
   void setMainPageIndoorEnvironmentData(const WeatherData::IndoorEnvironmentData& data);
@@ -83,6 +85,9 @@ class DisplayModule {
   MainPageRegionState mainPageSidebarIndoorState_{0, true, false, false};
   MainPageRegionState mainPageSidebarForecastState_{0, true, false, false};
   MainPageRegionState mainPageContentState_{0, true, false, false};
+  uint8_t mainPageBatteryPercentage_ = 70;
+  bool mainPageCharging_ = true;
+  bool mainPagePowerConnected_ = true;
   WeatherData::SidebarWeatherData sidebarWeatherData_;
   bool hasRenderedMainPage_ = false;
 };

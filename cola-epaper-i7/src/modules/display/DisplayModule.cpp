@@ -5,8 +5,10 @@
 
 #include "modules/display/BatteryImage128x128.h"
 #include "modules/display/BitmapFontRenderer.h"
+#include "modules/display/ChargingImage16x16.h"
 #include "modules/display/HumidityImage32x32.h"
 #include "modules/display/LogoImage64x64.h"
+#include "modules/display/PowerImage16x16.h"
 #include "modules/display/TemperatureImage32x32.h"
 #include "modules/display/weather-icons/100.h"
 #include "modules/display/weather-icons/101.h"
@@ -40,6 +42,8 @@ constexpr int16_t kBatteryStatusSegmentGap = 2;
 constexpr int16_t kBatteryStatusInnerPadding = 2;
 constexpr int16_t kBatteryStatusTopMargin = 5;
 constexpr int16_t kBatteryStatusRightMargin = 5;
+constexpr int16_t kBatteryStatusAuxIconSize = 16;
+constexpr int16_t kBatteryStatusAuxIconGap = 4;
 constexpr char kMainPageTopTimeText[] = "12:00";
 constexpr char kMainPageContentTitleText[] = "距离上次吃奶";
 constexpr char kMainPageContentDurationText[] = "2H 15M";
@@ -471,6 +475,19 @@ void DisplayModule::renderMainPageRegion(MainPageRegion region) {
   }
 }
 
+void DisplayModule::setMainPageBatteryStatus(uint8_t batteryPercentage, bool isCharging,
+                                             bool isPowerConnected) {
+  if (mainPageBatteryPercentage_ == batteryPercentage && mainPageCharging_ == isCharging &&
+      mainPagePowerConnected_ == isPowerConnected) {
+    return;
+  }
+
+  mainPageBatteryPercentage_ = batteryPercentage;
+  mainPageCharging_ = isCharging;
+  mainPagePowerConnected_ = isPowerConnected;
+  markMainPageRegionDirty(MainPageRegion::kTop);
+}
+
 void DisplayModule::setMainPageSidebarWeatherData(const WeatherData::SidebarWeatherData& data) {
   const bool outdoorChanged = !isOutdoorEnvironmentDataEqual(sidebarWeatherData_.outdoor, data.outdoor);
   const bool indoorChanged = !isIndoorEnvironmentDataEqual(sidebarWeatherData_.indoor, data.indoor);
@@ -574,10 +591,26 @@ void DisplayModule::renderMainPageTopRegion(const MainPageRegionBounds& bounds) 
   const int16_t batteryIconX = bounds.x + bounds.width - kBatteryStatusIconWidth -
                                kBatteryStatusRightMargin;
   const int16_t batteryIconY = bounds.y + kBatteryStatusTopMargin;
+  const int16_t auxIconY =
+      batteryIconY + ((kBatteryStatusIconHeight - kBatteryStatusAuxIconSize) / 2);
+  int16_t nextAuxIconX = batteryIconX - kBatteryStatusAuxIconGap - kBatteryStatusAuxIconSize;
 
   auto bitmapFonts = createFontCN32Renderer(display_);
   drawCenterBitmapText(bitmapFonts, String(kMainPageTopTimeText), timeCenterX, timeCenterY);
-  renderBatteryStatusIcon(batteryIconX, batteryIconY, 70);
+
+  if (mainPageCharging_) {
+    display_.drawBitmap(nextAuxIconX, auxIconY, ChargingImage16x16::kBitmap,
+                        ChargingImage16x16::kWidth, ChargingImage16x16::kHeight,
+                        GxEPD_BLACK);
+    nextAuxIconX -= kBatteryStatusAuxIconGap + kBatteryStatusAuxIconSize;
+  }
+
+  if (mainPagePowerConnected_) {
+    display_.drawBitmap(nextAuxIconX, auxIconY, PowerImage16x16::kBitmap,
+                        PowerImage16x16::kWidth, PowerImage16x16::kHeight, GxEPD_BLACK);
+  }
+
+  renderBatteryStatusIcon(batteryIconX, batteryIconY, mainPageBatteryPercentage_);
 }
 
 void DisplayModule::renderMainPageSidebarRegion(const MainPageRegionBounds& bounds) {
