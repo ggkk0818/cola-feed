@@ -595,7 +595,7 @@ void DisplayModule::renderMainPageTopRegion(const MainPageRegionBounds& bounds) 
       batteryIconY + ((kBatteryStatusIconHeight - kBatteryStatusAuxIconSize) / 2);
   int16_t nextAuxIconX = batteryIconX - kBatteryStatusAuxIconGap - kBatteryStatusAuxIconSize;
 
-  auto bitmapFonts = createFontCN32Renderer(display_);
+  auto bitmapFonts = createFontCN96Renderer(display_);
   drawCenterBitmapText(bitmapFonts, String(kMainPageTopTimeText), timeCenterX, timeCenterY);
 
   if (mainPageCharging_) {

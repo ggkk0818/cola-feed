@@ -29,6 +29,14 @@ int16_t extraSpacingForFace(const BitmapFont::Face* face) {
     return 4;
   }
 
+  if (face == &FontCN64::kFace) {
+    return 8;
+  }
+
+  if (face == &FontCN96::kFace) {
+    return 12;
+  }
+
   return 0;
 }
 
