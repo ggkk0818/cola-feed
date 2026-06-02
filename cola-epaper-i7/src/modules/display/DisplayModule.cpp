@@ -711,9 +711,9 @@ void DisplayModule::renderMainPageSidebarForecastRegion(const MainPageRegionBoun
 void DisplayModule::renderMainPageContentRegion(const MainPageRegionBounds& bounds) {
   display_.fillRect(bounds.x, bounds.y, bounds.width, bounds.height, GxEPD_WHITE);
 
-  auto headerFonts = createFontCN32Renderer(display_);
+  auto headerFonts = createFontCN16Renderer(display_);
   auto durationFonts = createFontCN96Renderer(display_);
-  auto footerFonts = createFontCN32Renderer(display_);
+  auto footerFonts = createFontCN16Renderer(display_);
 
   const int16_t centerX = bounds.x + (bounds.width / 2);
   const int16_t centerY = bounds.y + (bounds.height / 2);

@@ -10,7 +10,7 @@ $currentChar = $null
 $currentBytes = New-Object System.Collections.Generic.List[string]
 
 $glyphWidth = 16
-$glyphHeight = 21
+$glyphHeight = 23
 $bytesPerRow = $glyphWidth / 8
 
 function Get-GlyphMetrics {
@@ -106,7 +106,7 @@ $header = @'
 namespace FontCN12 {
 
 constexpr uint8_t kGlyphWidth = 16;
-constexpr uint8_t kGlyphHeight = 21;
+constexpr uint8_t kGlyphHeight = 23;
 constexpr uint8_t kBytesPerRow = kGlyphWidth / 8;
 constexpr uint16_t kBytesPerGlyph = kBytesPerRow * kGlyphHeight;
 constexpr int16_t kGlyphAscent = kGlyphHeight;
@@ -135,8 +135,8 @@ $builder = New-Object System.Text.StringBuilder
 
 for ($index = 0; $index -lt $glyphs.Count; $index++) {
   $glyph = $glyphs[$index]
-  if ($glyph.Bytes.Count -ne 42) {
-    throw "Glyph $index ($($glyph.Char)) has $($glyph.Bytes.Count) bytes, expected 42."
+  if ($glyph.Bytes.Count -ne 46) {
+    throw "Glyph $index ($($glyph.Char)) has $($glyph.Bytes.Count) bytes, expected 46."
   }
 
   [void]$builder.AppendLine(("const uint8_t glyph{0}[] PROGMEM = {{" -f $index))
