@@ -5,7 +5,14 @@
 
 #include "modules/display/BatteryImage128x128.h"
 #include "modules/display/BitmapFontRenderer.h"
+#include "modules/display/HumidityImage32x32.h"
 #include "modules/display/LogoImage64x64.h"
+#include "modules/display/TemperatureImage32x32.h"
+#include "modules/display/weather-icons/100.h"
+#include "modules/display/weather-icons/101.h"
+#include "modules/display/weather-icons/102.h"
+#include "modules/display/weather-icons/103.h"
+#include "modules/display/weather-icons/104.h"
 
 namespace {
 constexpr uint8_t EPD_SCK_PIN = 14;
@@ -16,12 +23,164 @@ constexpr uint8_t EPD_DC_PIN = 5;
 constexpr uint8_t EPD_BUSY_PIN = 24;
 constexpr int16_t kMainPageTopHeight = 120;
 constexpr int16_t kMainPageSidebarWidth = 300;
+constexpr int16_t kMainPageSidebarTopSectionHeight = 120;
+constexpr int16_t kMainPageSidebarPanelWidth = kMainPageSidebarWidth / 2;
 constexpr int16_t kMainPageBorderThickness = 2;
+constexpr int16_t kMainPageTopTimeAreaWidth = 300;
 constexpr uint8_t kMainPageMaxConsecutivePartialRefreshes = 5;
+constexpr int16_t kMainPageSidebarPadding = 5;
+constexpr int16_t kMainPageSidebarDashLength = 4;
+constexpr int16_t kMainPageSidebarDashGap = 4;
+constexpr char kMainPageTopTimeText[] = "12:00";
+
+struct BitmapAsset {
+  const uint8_t* bitmap;
+  uint16_t width;
+  uint16_t height;
+};
+
+WeatherData::SidebarWeatherData createMockSidebarWeatherData() {
+  WeatherData::SidebarWeatherData data;
+  data.outdoor.temp = "26.1";
+  data.outdoor.icon = 100;
+  data.outdoor.text = "晴";
+  data.indoor.temp = "26.1";
+  data.indoor.humidity = "44.5";
+
+  data.forecast[0].fxDate = "2026-06-02";
+  data.forecast[0].tempMax = "28";
+  data.forecast[0].tempMin = "16";
+  data.forecast[0].iconDay = 101;
+  data.forecast[0].textDay = "阴";
+
+  data.forecast[1].fxDate = "2026-06-03";
+  data.forecast[1].tempMax = "28";
+  data.forecast[1].tempMin = "16";
+  data.forecast[1].iconDay = 102;
+  data.forecast[1].textDay = "多云";
+
+  data.forecast[2].fxDate = "2026-06-04";
+  data.forecast[2].tempMax = "28";
+  data.forecast[2].tempMin = "16";
+  data.forecast[2].iconDay = 103;
+  data.forecast[2].textDay = "小雨";
+
+  data.forecast[3].fxDate = "2026-06-05";
+  data.forecast[3].tempMax = "28";
+  data.forecast[3].tempMin = "16";
+  data.forecast[3].iconDay = 104;
+  data.forecast[3].textDay = "大雪";
+  return data;
+}
+
+bool isOutdoorEnvironmentDataEqual(const WeatherData::OutdoorEnvironmentData& left,
+                                   const WeatherData::OutdoorEnvironmentData& right) {
+  return left.temp == right.temp && left.icon == right.icon && left.text == right.text;
+}
+
+bool isIndoorEnvironmentDataEqual(const WeatherData::IndoorEnvironmentData& left,
+                                  const WeatherData::IndoorEnvironmentData& right) {
+  return left.temp == right.temp && left.humidity == right.humidity;
+}
+
+bool isDailyForecastDataEqual(const WeatherData::DailyForecastData& left,
+                              const WeatherData::DailyForecastData& right) {
+  return left.fxDate == right.fxDate && left.tempMax == right.tempMax &&
+         left.tempMin == right.tempMin && left.iconDay == right.iconDay &&
+         left.textDay == right.textDay;
+}
+
+bool resolveWeatherIconAsset(uint16_t iconCode, BitmapAsset& asset) {
+  switch (iconCode) {
+    case 100:
+      asset = BitmapAsset{WeatherIcon100::kBitmap, WeatherIcon100::kWidth, WeatherIcon100::kHeight};
+      return true;
+    case 101:
+      asset = BitmapAsset{WeatherIcon101::kBitmap, WeatherIcon101::kWidth, WeatherIcon101::kHeight};
+      return true;
+    case 102:
+      asset = BitmapAsset{WeatherIcon102::kBitmap, WeatherIcon102::kWidth, WeatherIcon102::kHeight};
+      return true;
+    case 103:
+      asset = BitmapAsset{WeatherIcon103::kBitmap, WeatherIcon103::kWidth, WeatherIcon103::kHeight};
+      return true;
+    case 104:
+      asset = BitmapAsset{WeatherIcon104::kBitmap, WeatherIcon104::kWidth, WeatherIcon104::kHeight};
+      return true;
+    default:
+      asset = BitmapAsset{WeatherIcon100::kBitmap, WeatherIcon100::kWidth, WeatherIcon100::kHeight};
+      return false;
+  }
+}
+
+void drawWeatherIcon(DisplayDriver& display, int16_t x, int16_t y, uint16_t iconCode) {
+  BitmapAsset asset{};
+  resolveWeatherIconAsset(iconCode, asset);
+  display.drawBitmap(x, y, asset.bitmap, asset.width, asset.height, GxEPD_BLACK);
+}
+
+void drawHorizontalDashedLine(DisplayDriver& display, int16_t y, int16_t startX, int16_t endX) {
+  if (endX < startX) {
+    return;
+  }
+
+  for (int16_t x = startX; x <= endX; x += kMainPageSidebarDashLength + kMainPageSidebarDashGap) {
+    int16_t dashEndX = x + kMainPageSidebarDashLength - 1;
+    if (dashEndX > endX) {
+      dashEndX = endX;
+    }
+
+    display.drawLine(x, y, dashEndX, y, GxEPD_BLACK);
+  }
+}
+
+void drawVerticalDashedLine(DisplayDriver& display, int16_t x, int16_t startY, int16_t endY) {
+  if (endY < startY) {
+    return;
+  }
+
+  for (int16_t y = startY; y <= endY; y += kMainPageSidebarDashLength + kMainPageSidebarDashGap) {
+    int16_t dashEndY = y + kMainPageSidebarDashLength - 1;
+    if (dashEndY > endY) {
+      dashEndY = endY;
+    }
+
+    display.drawLine(x, y, x, dashEndY, GxEPD_BLACK);
+  }
+}
+
+String formatTemperatureValue(const String& temp) {
+  return temp + "°C";
+}
+
+String formatHumidityValue(const String& humidity) {
+  return humidity + "%";
+}
+
+String formatForecastTemperatureRange(const WeatherData::DailyForecastData& forecast) {
+  return forecast.tempMin + "~" + forecast.tempMax + "°C";
+}
+
+String formatForecastTitle(size_t forecastIndex, const WeatherData::DailyForecastData& forecast) {
+  if (forecastIndex == 0) {
+    return String("今日");
+  }
+
+  if (forecastIndex == 1) {
+    return String("明日");
+  }
+
+  if (forecast.fxDate.length() >= 2) {
+    return forecast.fxDate.substring(forecast.fxDate.length() - 2) + "日";
+  }
+
+  return String("--日");
+}
 }  // namespace
 
 DisplayModule::DisplayModule()
-    : display_(GxEPD2_750c_GDEY075Z08(EPD_CS_PIN, EPD_DC_PIN, EPD_RST_PIN, EPD_BUSY_PIN)) {}
+    : display_(GxEPD2_750c_GDEY075Z08(EPD_CS_PIN, EPD_DC_PIN, EPD_RST_PIN, EPD_BUSY_PIN)),
+      sidebarWeatherData_(createMockSidebarWeatherData()) {}
 
 void DisplayModule::begin() {
   SPI.begin(EPD_SCK_PIN, -1, EPD_MOSI_PIN, EPD_CS_PIN);
@@ -41,21 +200,42 @@ void DisplayModule::renderMainPage() {
     return;
   }
 
-  const MainPageRegion regions[] = {
+  bool renderedAnyRegion = false;
+
+  const MainPageRegion standaloneRegions[] = {
       MainPageRegion::kTop,
-      MainPageRegion::kSidebar,
+      MainPageRegion::kSidebarForecast,
       MainPageRegion::kContent,
   };
 
-  bool renderedAnyRegion = false;
-  for (MainPageRegion region : regions) {
-    if (!shouldRenderMainPageRegion(region)) {
-      continue;
+  for (MainPageRegion region : standaloneRegions) {
+    if (shouldRenderMainPageRegion(region)) {
+      renderMainPagePartialRefresh(region);
+      updateMainPageRegionStateAfterRefresh(region, false);
+      renderedAnyRegion = true;
     }
+  }
 
-    renderMainPagePartialRefresh(region);
-    updateMainPageRegionStateAfterRefresh(region, false);
+  if (shouldRenderMainPageSidebarUpperRegion()) {
+    renderMainPageSidebarUpperPartialRefresh();
+    updateMainPageRegionStateAfterRefresh(MainPageRegion::kSidebarOutdoor, false);
+    updateMainPageRegionStateAfterRefresh(MainPageRegion::kSidebarIndoor, false);
     renderedAnyRegion = true;
+  } else {
+    const MainPageRegion upperRegions[] = {
+        MainPageRegion::kSidebarOutdoor,
+        MainPageRegion::kSidebarIndoor,
+    };
+
+    for (MainPageRegion region : upperRegions) {
+      if (!shouldRenderMainPageRegion(region)) {
+        continue;
+      }
+
+      renderMainPagePartialRefresh(region);
+      updateMainPageRegionStateAfterRefresh(region, false);
+      renderedAnyRegion = true;
+    }
   }
 
   if (renderedAnyRegion) {
@@ -74,6 +254,28 @@ DisplayModule::MainPageRegionBounds DisplayModule::getMainPageSidebarBounds() co
                               static_cast<int16_t>(display_.height() - kMainPageTopHeight)};
 }
 
+DisplayModule::MainPageRegionBounds DisplayModule::getMainPageSidebarUpperBounds() const {
+  return MainPageRegionBounds{0, kMainPageTopHeight, kMainPageSidebarWidth,
+                              kMainPageSidebarTopSectionHeight};
+}
+
+DisplayModule::MainPageRegionBounds DisplayModule::getMainPageSidebarOutdoorBounds() const {
+  return MainPageRegionBounds{0, kMainPageTopHeight, kMainPageSidebarPanelWidth,
+                              kMainPageSidebarTopSectionHeight};
+}
+
+DisplayModule::MainPageRegionBounds DisplayModule::getMainPageSidebarIndoorBounds() const {
+  return MainPageRegionBounds{kMainPageSidebarPanelWidth, kMainPageTopHeight,
+                              kMainPageSidebarPanelWidth, kMainPageSidebarTopSectionHeight};
+}
+
+DisplayModule::MainPageRegionBounds DisplayModule::getMainPageSidebarForecastBounds() const {
+  return MainPageRegionBounds{0, static_cast<int16_t>(kMainPageTopHeight + kMainPageSidebarTopSectionHeight),
+                              kMainPageSidebarWidth,
+                              static_cast<int16_t>(display_.height() - kMainPageTopHeight -
+                                                   kMainPageSidebarTopSectionHeight)};
+}
+
 DisplayModule::MainPageRegionBounds DisplayModule::getMainPageContentBounds() const {
   return MainPageRegionBounds{kMainPageSidebarWidth, kMainPageTopHeight,
                               static_cast<int16_t>(display_.width() - kMainPageSidebarWidth),
@@ -85,8 +287,12 @@ DisplayModule::MainPageRegionBounds DisplayModule::getMainPageRegionBounds(
   switch (region) {
     case MainPageRegion::kTop:
       return getMainPageTopBounds();
-    case MainPageRegion::kSidebar:
-      return getMainPageSidebarBounds();
+    case MainPageRegion::kSidebarOutdoor:
+      return getMainPageSidebarOutdoorBounds();
+    case MainPageRegion::kSidebarIndoor:
+      return getMainPageSidebarIndoorBounds();
+    case MainPageRegion::kSidebarForecast:
+      return getMainPageSidebarForecastBounds();
     case MainPageRegion::kContent:
       return getMainPageContentBounds();
   }
@@ -99,8 +305,12 @@ DisplayModule::MainPageRegionState& DisplayModule::getMainPageRegionState(
   switch (region) {
     case MainPageRegion::kTop:
       return mainPageTopState_;
-    case MainPageRegion::kSidebar:
-      return mainPageSidebarState_;
+    case MainPageRegion::kSidebarOutdoor:
+      return mainPageSidebarOutdoorState_;
+    case MainPageRegion::kSidebarIndoor:
+      return mainPageSidebarIndoorState_;
+    case MainPageRegion::kSidebarForecast:
+      return mainPageSidebarForecastState_;
     case MainPageRegion::kContent:
       return mainPageContentState_;
   }
@@ -113,8 +323,12 @@ const DisplayModule::MainPageRegionState& DisplayModule::getMainPageRegionState(
   switch (region) {
     case MainPageRegion::kTop:
       return mainPageTopState_;
-    case MainPageRegion::kSidebar:
-      return mainPageSidebarState_;
+    case MainPageRegion::kSidebarOutdoor:
+      return mainPageSidebarOutdoorState_;
+    case MainPageRegion::kSidebarIndoor:
+      return mainPageSidebarIndoorState_;
+    case MainPageRegion::kSidebarForecast:
+      return mainPageSidebarForecastState_;
     case MainPageRegion::kContent:
       return mainPageContentState_;
   }
@@ -129,7 +343,9 @@ bool DisplayModule::shouldRenderMainPageFullRefresh() const {
 
   const MainPageRegion regions[] = {
       MainPageRegion::kTop,
-      MainPageRegion::kSidebar,
+    MainPageRegion::kSidebarOutdoor,
+    MainPageRegion::kSidebarIndoor,
+    MainPageRegion::kSidebarForecast,
       MainPageRegion::kContent,
   };
 
@@ -152,12 +368,19 @@ bool DisplayModule::shouldRenderMainPageRegion(MainPageRegion region) const {
   return getMainPageRegionState(region).dirty;
 }
 
+bool DisplayModule::shouldRenderMainPageSidebarUpperRegion() const {
+  return shouldRenderMainPageRegion(MainPageRegion::kSidebarOutdoor) &&
+         shouldRenderMainPageRegion(MainPageRegion::kSidebarIndoor);
+}
+
 void DisplayModule::renderMainPageFullRefresh() {
   display_.setFullWindow();
   display_.firstPage();
   do {
     renderMainPageRegion(MainPageRegion::kTop);
-    renderMainPageRegion(MainPageRegion::kSidebar);
+    renderMainPageRegion(MainPageRegion::kSidebarOutdoor);
+    renderMainPageRegion(MainPageRegion::kSidebarIndoor);
+    renderMainPageRegion(MainPageRegion::kSidebarForecast);
     renderMainPageRegion(MainPageRegion::kContent);
     renderMainPageLayout();
   } while (display_.nextPage());
@@ -170,6 +393,18 @@ void DisplayModule::renderMainPagePartialRefresh(MainPageRegion region) {
   display_.firstPage();
   do {
     renderMainPageRegion(region);
+    renderMainPageLayout();
+  } while (display_.nextPage());
+}
+
+void DisplayModule::renderMainPageSidebarUpperPartialRefresh() {
+  const MainPageRegionBounds bounds = getMainPageSidebarUpperBounds();
+
+  display_.setPartialWindow(bounds.x, bounds.y, bounds.width, bounds.height);
+  display_.firstPage();
+  do {
+    renderMainPageSidebarOutdoorRegion(getMainPageSidebarOutdoorBounds());
+    renderMainPageSidebarIndoorRegion(getMainPageSidebarIndoorBounds());
     renderMainPageLayout();
   } while (display_.nextPage());
 }
@@ -193,8 +428,14 @@ void DisplayModule::renderMainPageRegion(MainPageRegion region) {
     case MainPageRegion::kTop:
       renderMainPageTopRegion(bounds);
       return;
-    case MainPageRegion::kSidebar:
-      renderMainPageSidebarRegion(bounds);
+    case MainPageRegion::kSidebarOutdoor:
+      renderMainPageSidebarOutdoorRegion(bounds);
+      return;
+    case MainPageRegion::kSidebarIndoor:
+      renderMainPageSidebarIndoorRegion(bounds);
+      return;
+    case MainPageRegion::kSidebarForecast:
+      renderMainPageSidebarForecastRegion(bounds);
       return;
     case MainPageRegion::kContent:
       renderMainPageContentRegion(bounds);
@@ -202,16 +443,181 @@ void DisplayModule::renderMainPageRegion(MainPageRegion region) {
   }
 }
 
+void DisplayModule::setMainPageSidebarWeatherData(const WeatherData::SidebarWeatherData& data) {
+  const bool outdoorChanged = !isOutdoorEnvironmentDataEqual(sidebarWeatherData_.outdoor, data.outdoor);
+  const bool indoorChanged = !isIndoorEnvironmentDataEqual(sidebarWeatherData_.indoor, data.indoor);
+
+  bool forecastChanged = false;
+  for (size_t index = 0; index < WeatherData::kForecastDayCount; ++index) {
+    if (!isDailyForecastDataEqual(sidebarWeatherData_.forecast[index], data.forecast[index])) {
+      forecastChanged = true;
+      break;
+    }
+  }
+
+  sidebarWeatherData_ = data;
+
+  if (outdoorChanged) {
+    markMainPageRegionDirty(MainPageRegion::kSidebarOutdoor);
+  }
+
+  if (indoorChanged) {
+    markMainPageRegionDirty(MainPageRegion::kSidebarIndoor);
+  }
+
+  if (forecastChanged) {
+    markMainPageRegionDirty(MainPageRegion::kSidebarForecast);
+  }
+}
+
+void DisplayModule::setMainPageOutdoorEnvironmentData(
+    const WeatherData::OutdoorEnvironmentData& data) {
+  if (isOutdoorEnvironmentDataEqual(sidebarWeatherData_.outdoor, data)) {
+    return;
+  }
+
+  sidebarWeatherData_.outdoor = data;
+  markMainPageRegionDirty(MainPageRegion::kSidebarOutdoor);
+}
+
+void DisplayModule::setMainPageIndoorEnvironmentData(
+    const WeatherData::IndoorEnvironmentData& data) {
+  if (isIndoorEnvironmentDataEqual(sidebarWeatherData_.indoor, data)) {
+    return;
+  }
+
+  sidebarWeatherData_.indoor = data;
+  markMainPageRegionDirty(MainPageRegion::kSidebarIndoor);
+}
+
+void DisplayModule::setMainPageForecastData(const WeatherData::DailyForecastData* forecastDays,
+                                            size_t forecastDayCount) {
+  bool forecastChanged = false;
+
+  for (size_t index = 0; index < WeatherData::kForecastDayCount; ++index) {
+    WeatherData::DailyForecastData nextForecast;
+    if (forecastDays != nullptr && index < forecastDayCount) {
+      nextForecast = forecastDays[index];
+    }
+
+    if (!isDailyForecastDataEqual(sidebarWeatherData_.forecast[index], nextForecast)) {
+      sidebarWeatherData_.forecast[index] = nextForecast;
+      forecastChanged = true;
+    }
+  }
+
+  if (forecastChanged) {
+    markMainPageRegionDirty(MainPageRegion::kSidebarForecast);
+  }
+}
+
 void DisplayModule::renderMainPageTopRegion(const MainPageRegionBounds& bounds) {
   display_.fillRect(bounds.x, bounds.y, bounds.width, bounds.height, GxEPD_WHITE);
 
-  // TODO: Render the top bar content.
+  const int16_t timeAreaWidth =
+      bounds.width < kMainPageTopTimeAreaWidth ? bounds.width : kMainPageTopTimeAreaWidth;
+  const int16_t timeAreaHeight =
+      bounds.height > kMainPageBorderThickness ? bounds.height - kMainPageBorderThickness : 0;
+  const int16_t timeCenterX = bounds.x + (timeAreaWidth / 2);
+  const int16_t timeCenterY = bounds.y + (timeAreaHeight / 2);
+
+  auto bitmapFonts = createFontCN32Renderer(display_);
+  drawCenterBitmapText(bitmapFonts, String(kMainPageTopTimeText), timeCenterX, timeCenterY);
 }
 
 void DisplayModule::renderMainPageSidebarRegion(const MainPageRegionBounds& bounds) {
   display_.fillRect(bounds.x, bounds.y, bounds.width, bounds.height, GxEPD_WHITE);
 
-  // TODO: Render the left sidebar content.
+  renderMainPageSidebarOutdoorRegion(getMainPageSidebarOutdoorBounds());
+  renderMainPageSidebarIndoorRegion(getMainPageSidebarIndoorBounds());
+  renderMainPageSidebarForecastRegion(getMainPageSidebarForecastBounds());
+}
+
+void DisplayModule::renderMainPageSidebarOutdoorRegion(const MainPageRegionBounds& bounds) {
+  display_.fillRect(bounds.x, bounds.y, bounds.width, bounds.height, GxEPD_WHITE);
+
+  auto labelFonts = createFontCN12Renderer(display_);
+  auto valueFonts = createFontCN32Renderer(display_);
+
+  drawLeftBitmapText(labelFonts, String("室外"), bounds.x + 5, bounds.y + 15);
+  drawWeatherIcon(display_, bounds.x + 5, bounds.y + 43, sidebarWeatherData_.outdoor.icon);
+  drawLeftBitmapText(labelFonts, sidebarWeatherData_.outdoor.text, bounds.x + 74, bounds.y + 45);
+  drawLeftBitmapText(valueFonts, formatTemperatureValue(sidebarWeatherData_.outdoor.temp),
+                     bounds.x + 74, bounds.y + 75);
+
+  const int16_t dividerX = bounds.x + bounds.width - 1;
+  const int16_t dividerStartY = bounds.y + kMainPageSidebarPadding;
+  const int16_t dividerEndY = bounds.y + bounds.height - kMainPageSidebarPadding - 1;
+  drawVerticalDashedLine(display_, dividerX, dividerStartY, dividerEndY);
+
+  const int16_t dividerY = bounds.y + bounds.height - 1;
+  drawHorizontalDashedLine(display_, dividerY, bounds.x + kMainPageSidebarPadding,
+                           bounds.x + bounds.width - 1);
+}
+
+void DisplayModule::renderMainPageSidebarIndoorRegion(const MainPageRegionBounds& bounds) {
+  display_.fillRect(bounds.x, bounds.y, bounds.width, bounds.height, GxEPD_WHITE);
+
+  auto labelFonts = createFontCN12Renderer(display_);
+  auto valueFonts = createFontCN32Renderer(display_);
+
+  drawLeftBitmapText(labelFonts, String("室内"), bounds.x + 5, bounds.y + 15);
+  display_.drawBitmap(bounds.x + 5, bounds.y + 38, TemperatureImage32x32::kBitmap,
+                      TemperatureImage32x32::kWidth, TemperatureImage32x32::kHeight,
+                      GxEPD_BLACK);
+  display_.drawBitmap(bounds.x + 5, bounds.y + 75, HumidityImage32x32::kBitmap,
+                      HumidityImage32x32::kWidth, HumidityImage32x32::kHeight, GxEPD_BLACK);
+  drawLeftBitmapText(valueFonts, formatTemperatureValue(sidebarWeatherData_.indoor.temp),
+                     bounds.x + 42, bounds.y + 54);
+  drawLeftBitmapText(valueFonts, formatHumidityValue(sidebarWeatherData_.indoor.humidity),
+                     bounds.x + 42, bounds.y + 91);
+
+  const int16_t dividerY = bounds.y + bounds.height - 1;
+  drawHorizontalDashedLine(display_, dividerY, bounds.x,
+                           bounds.x + bounds.width - kMainPageSidebarPadding - 1);
+}
+
+void DisplayModule::renderMainPageSidebarForecastRegion(const MainPageRegionBounds& bounds) {
+  display_.fillRect(bounds.x, bounds.y, bounds.width, bounds.height, GxEPD_WHITE);
+
+  const MainPageRegionBounds gridBounds[WeatherData::kForecastDayCount] = {
+      MainPageRegionBounds{bounds.x, bounds.y, kMainPageSidebarPanelWidth,
+                           kMainPageSidebarTopSectionHeight},
+      MainPageRegionBounds{static_cast<int16_t>(bounds.x + kMainPageSidebarPanelWidth), bounds.y,
+                           kMainPageSidebarPanelWidth, kMainPageSidebarTopSectionHeight},
+      MainPageRegionBounds{bounds.x,
+                           static_cast<int16_t>(bounds.y + kMainPageSidebarTopSectionHeight),
+                           kMainPageSidebarPanelWidth, kMainPageSidebarTopSectionHeight},
+      MainPageRegionBounds{static_cast<int16_t>(bounds.x + kMainPageSidebarPanelWidth),
+                           static_cast<int16_t>(bounds.y + kMainPageSidebarTopSectionHeight),
+                           kMainPageSidebarPanelWidth, kMainPageSidebarTopSectionHeight},
+  };
+
+  auto labelFonts = createFontCN12Renderer(display_);
+  for (size_t index = 0; index < WeatherData::kForecastDayCount; ++index) {
+    const MainPageRegionBounds& grid = gridBounds[index];
+    const WeatherData::DailyForecastData& forecast = sidebarWeatherData_.forecast[index];
+
+    drawLeftBitmapText(labelFonts, formatForecastTitle(index, forecast), grid.x + 5, grid.y + 15);
+    drawWeatherIcon(display_, grid.x + 5, grid.y + 43, forecast.iconDay);
+    drawLeftBitmapText(labelFonts, forecast.textDay, grid.x + 74, grid.y + 43);
+    drawLeftBitmapText(labelFonts, formatForecastTemperatureRange(forecast), grid.x + 74,
+                       grid.y + 63);
+  }
+
+  const int16_t splitX = bounds.x + kMainPageSidebarPanelWidth - 1;
+  const int16_t splitY = bounds.y + kMainPageSidebarTopSectionHeight - 1;
+  const int16_t boundsRight = bounds.x + bounds.width - 1;
+  const int16_t boundsBottom = bounds.y + bounds.height - 1;
+
+  drawVerticalDashedLine(display_, splitX, bounds.y + kMainPageSidebarPadding,
+                         splitY - kMainPageSidebarPadding);
+  drawVerticalDashedLine(display_, splitX, splitY + kMainPageSidebarPadding,
+                         boundsBottom - kMainPageSidebarPadding);
+  drawHorizontalDashedLine(display_, splitY, bounds.x + kMainPageSidebarPadding,
+                           splitX - kMainPageSidebarPadding);
+  drawHorizontalDashedLine(display_, splitY, splitX + kMainPageSidebarPadding,
+                           boundsRight - kMainPageSidebarPadding);
 }
 
 void DisplayModule::renderMainPageContentRegion(const MainPageRegionBounds& bounds) {
@@ -235,10 +641,18 @@ void DisplayModule::updateMainPageRegionStateAfterRefresh(MainPageRegion region,
   state.dirty = false;
 }
 
+void DisplayModule::markMainPageRegionDirty(MainPageRegion region, bool willDrawRed) {
+  MainPageRegionState& state = getMainPageRegionState(region);
+  state.dirty = true;
+  state.willDrawRed = state.willDrawRed || willDrawRed;
+}
+
 void DisplayModule::resetMainPageRegionStateAfterFullRefresh() {
   const MainPageRegion regions[] = {
       MainPageRegion::kTop,
-      MainPageRegion::kSidebar,
+      MainPageRegion::kSidebarOutdoor,
+      MainPageRegion::kSidebarIndoor,
+      MainPageRegion::kSidebarForecast,
       MainPageRegion::kContent,
   };
 
