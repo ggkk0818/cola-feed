@@ -66,6 +66,7 @@ class DisplayModule {
   void renderMainPageSidebarUpperPartialRefresh();
   void renderMainPageLayout();
   void renderMainPageRegion(MainPageRegion region);
+  void renderBatteryStatusIcon(int16_t x, int16_t y, uint8_t batteryPercentage);
   void renderMainPageTopRegion(const MainPageRegionBounds& bounds);
   void renderMainPageSidebarRegion(const MainPageRegionBounds& bounds);
   void renderMainPageSidebarOutdoorRegion(const MainPageRegionBounds& bounds);

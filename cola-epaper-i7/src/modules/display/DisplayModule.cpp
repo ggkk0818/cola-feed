@@ -32,6 +32,14 @@ constexpr int16_t kMainPageSidebarPadding = 5;
 constexpr int16_t kMainPageSidebarDashLength = 4;
 constexpr int16_t kMainPageSidebarDashGap = 4;
 constexpr int16_t kMainPageContentTextEdgeOffset = 25;
+constexpr int16_t kBatteryStatusIconWidth = 32;
+constexpr int16_t kBatteryStatusIconHeight = 18;
+constexpr int16_t kBatteryStatusHeadWidth = 4;
+constexpr int16_t kBatteryStatusBodyWidth = kBatteryStatusIconWidth - kBatteryStatusHeadWidth;
+constexpr int16_t kBatteryStatusSegmentGap = 2;
+constexpr int16_t kBatteryStatusInnerPadding = 2;
+constexpr int16_t kBatteryStatusTopMargin = 5;
+constexpr int16_t kBatteryStatusRightMargin = 5;
 constexpr char kMainPageTopTimeText[] = "12:00";
 constexpr char kMainPageContentTitleText[] = "距离上次吃奶";
 constexpr char kMainPageContentDurationText[] = "2H 15M";
@@ -179,6 +187,22 @@ String formatForecastTitle(size_t forecastIndex, const WeatherData::DailyForecas
   }
 
   return String("--日");
+}
+
+uint8_t resolveBatterySegmentCount(uint8_t batteryPercentage) {
+  if (batteryPercentage >= 90) {
+    return 3;
+  }
+
+  if (batteryPercentage >= 60) {
+    return 2;
+  }
+
+  if (batteryPercentage >= 30) {
+    return 1;
+  }
+
+  return 0;
 }
 }  // namespace
 
@@ -515,6 +539,29 @@ void DisplayModule::setMainPageForecastData(const WeatherData::DailyForecastData
   }
 }
 
+void DisplayModule::renderBatteryStatusIcon(int16_t x, int16_t y, uint8_t batteryPercentage) {
+  const uint8_t segmentCount = resolveBatterySegmentCount(batteryPercentage);
+  const int16_t headHeight = 8;
+  const int16_t headY = y + ((kBatteryStatusIconHeight - headHeight) / 2);
+  const int16_t segmentAreaX = x + 1 + kBatteryStatusInnerPadding;
+  const int16_t segmentAreaY = y + 1 + kBatteryStatusInnerPadding;
+  const int16_t segmentAreaWidth = kBatteryStatusBodyWidth - 2 - (kBatteryStatusInnerPadding * 2);
+  const int16_t segmentAreaHeight = kBatteryStatusIconHeight - 2 - (kBatteryStatusInnerPadding * 2);
+  const int16_t segmentWidth =
+      (segmentAreaWidth - (kBatteryStatusSegmentGap * 2)) / 3;
+
+  display_.drawRoundRect(x, y, kBatteryStatusBodyWidth, kBatteryStatusIconHeight, 4,
+                         GxEPD_BLACK);
+  display_.fillRoundRect(x + kBatteryStatusBodyWidth, headY, kBatteryStatusHeadWidth, headHeight,
+                         1, GxEPD_BLACK);
+
+  for (uint8_t segmentIndex = 0; segmentIndex < segmentCount; ++segmentIndex) {
+    const int16_t segmentX =
+        segmentAreaX + (segmentIndex * (segmentWidth + kBatteryStatusSegmentGap));
+    display_.fillRect(segmentX, segmentAreaY, segmentWidth, segmentAreaHeight, GxEPD_BLACK);
+  }
+}
+
 void DisplayModule::renderMainPageTopRegion(const MainPageRegionBounds& bounds) {
   display_.fillRect(bounds.x, bounds.y, bounds.width, bounds.height, GxEPD_WHITE);
 
@@ -524,9 +571,13 @@ void DisplayModule::renderMainPageTopRegion(const MainPageRegionBounds& bounds) 
       bounds.height > kMainPageBorderThickness ? bounds.height - kMainPageBorderThickness : 0;
   const int16_t timeCenterX = bounds.x + (timeAreaWidth / 2);
   const int16_t timeCenterY = bounds.y + (timeAreaHeight / 2);
+  const int16_t batteryIconX = bounds.x + bounds.width - kBatteryStatusIconWidth -
+                               kBatteryStatusRightMargin;
+  const int16_t batteryIconY = bounds.y + kBatteryStatusTopMargin;
 
   auto bitmapFonts = createFontCN32Renderer(display_);
   drawCenterBitmapText(bitmapFonts, String(kMainPageTopTimeText), timeCenterX, timeCenterY);
+  renderBatteryStatusIcon(batteryIconX, batteryIconY, 70);
 }
 
 void DisplayModule::renderMainPageSidebarRegion(const MainPageRegionBounds& bounds) {
