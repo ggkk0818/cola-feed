@@ -8,10 +8,55 @@ $lines = Get-Content -Path $SourcePath -Encoding UTF8
 $glyphs = New-Object System.Collections.Generic.List[object]
 $currentChar = $null
 $currentBytes = New-Object System.Collections.Generic.List[string]
+$currentGlyphWidth = $null
+$currentGlyphHeight = $null
+$glyphWidth = $null
+$glyphHeight = $null
+$bytesPerRow = $null
 
-$glyphWidth = 48
-$glyphHeight = 62
-$bytesPerRow = $glyphWidth / 8
+$glyphHeaderPattern = [regex]'/\*--\s+.*?:\s*(.*?)\s*--\*/'
+$dimensionPattern = [regex]'(\d+)\s*x\s*(\d+)'
+
+function Complete-Glyph {
+  param(
+    [System.Collections.Generic.List[object]]$Glyphs,
+    [string]$CurrentChar,
+    [System.Collections.Generic.List[string]]$CurrentBytes,
+    [Nullable[int]]$CurrentGlyphWidth,
+    [Nullable[int]]$CurrentGlyphHeight,
+    [ref]$GlyphWidth,
+    [ref]$GlyphHeight,
+    [ref]$BytesPerRow
+  )
+
+  if ($null -eq $CurrentChar -or $CurrentBytes.Count -eq 0) {
+    return
+  }
+
+  if ($null -eq $CurrentGlyphWidth -or $null -eq $CurrentGlyphHeight) {
+    throw "Glyph '$CurrentChar' is missing dimension metadata."
+  }
+
+  if (($CurrentGlyphWidth % 8) -ne 0) {
+    throw "Glyph '$CurrentChar' width $CurrentGlyphWidth is not aligned to 8 bits."
+  }
+
+  if ($null -eq $GlyphWidth.Value) {
+    $GlyphWidth.Value = $CurrentGlyphWidth
+    $GlyphHeight.Value = $CurrentGlyphHeight
+    $BytesPerRow.Value = [int]($CurrentGlyphWidth / 8)
+  }
+  elseif ($GlyphWidth.Value -ne $CurrentGlyphWidth -or $GlyphHeight.Value -ne $CurrentGlyphHeight) {
+    throw "Glyph '$CurrentChar' dimensions ${CurrentGlyphWidth}x${CurrentGlyphHeight} do not match expected ${($GlyphWidth.Value)}x${($GlyphHeight.Value)}."
+  }
+
+  $expectedBytesPerGlyph = $BytesPerRow.Value * $GlyphHeight.Value
+  if ($CurrentBytes.Count -ne $expectedBytesPerGlyph) {
+    throw "Glyph '$CurrentChar' has $($CurrentBytes.Count) bytes, expected $expectedBytesPerGlyph for ${($GlyphWidth.Value)}x${($GlyphHeight.Value)}."
+  }
+
+  $Glyphs.Add([pscustomobject]@{ Char = $CurrentChar; Bytes = @($CurrentBytes) })
+}
 
 function Get-GlyphMetrics {
   param(
@@ -73,13 +118,25 @@ function Get-GlyphMetrics {
 }
 
 foreach ($line in $lines) {
-  if ($line.StartsWith('/*--') -and $line -match ':\s*(.*?)\s*--\*/') {
-    if ($null -ne $currentChar -and $currentBytes.Count -gt 0) {
-      $glyphs.Add([pscustomobject]@{ Char = $currentChar; Bytes = @($currentBytes) })
+  if ($line.StartsWith('/*--')) {
+    $dimensionMatch = $dimensionPattern.Match($line)
+    if ($dimensionMatch.Success) {
+      $currentGlyphWidth = [int]$dimensionMatch.Groups[1].Value
+      $currentGlyphHeight = [int]$dimensionMatch.Groups[2].Value
     }
 
-    $currentChar = $matches[1].Trim()
-    $currentBytes = New-Object System.Collections.Generic.List[string]
+    $glyphHeaderMatch = $glyphHeaderPattern.Match($line)
+    if ($glyphHeaderMatch.Success) {
+      Complete-Glyph -Glyphs $glyphs -CurrentChar $currentChar -CurrentBytes $currentBytes `
+        -CurrentGlyphWidth $currentGlyphWidth -CurrentGlyphHeight $currentGlyphHeight `
+        -GlyphWidth ([ref]$glyphWidth) -GlyphHeight ([ref]$glyphHeight) -BytesPerRow ([ref]$bytesPerRow)
+
+      $currentChar = $glyphHeaderMatch.Groups[1].Value.Trim()
+      $currentBytes = New-Object System.Collections.Generic.List[string]
+      $currentGlyphWidth = $null
+      $currentGlyphHeight = $null
+    }
+
     continue
   }
 
@@ -88,12 +145,16 @@ foreach ($line in $lines) {
   }
 }
 
-if ($null -ne $currentChar -and $currentBytes.Count -gt 0) {
-  $glyphs.Add([pscustomobject]@{ Char = $currentChar; Bytes = @($currentBytes) })
-}
+Complete-Glyph -Glyphs $glyphs -CurrentChar $currentChar -CurrentBytes $currentBytes `
+  -CurrentGlyphWidth $currentGlyphWidth -CurrentGlyphHeight $currentGlyphHeight `
+  -GlyphWidth ([ref]$glyphWidth) -GlyphHeight ([ref]$glyphHeight) -BytesPerRow ([ref]$bytesPerRow)
 
 if ($glyphs.Count -eq 0) {
   throw 'No glyphs parsed from font file.'
+}
+
+if ($null -eq $glyphWidth -or $null -eq $glyphHeight -or $null -eq $bytesPerRow) {
+  throw 'Font dimensions could not be resolved from the source file.'
 }
 
 $header = @'
@@ -106,8 +167,8 @@ $header = @'
 
 namespace FontCN32 {
 
-constexpr uint8_t kGlyphWidth = 48;
-constexpr uint8_t kGlyphHeight = 62;
+constexpr uint8_t kGlyphWidth = __GLYPH_WIDTH__;
+constexpr uint8_t kGlyphHeight = __GLYPH_HEIGHT__;
 constexpr uint8_t kBytesPerRow = kGlyphWidth / 8;
 constexpr uint16_t kBytesPerGlyph = kBytesPerRow * kGlyphHeight;
 constexpr int16_t kGlyphAscent = kGlyphHeight;
@@ -126,6 +187,8 @@ const Glyph* findGlyph(uint32_t codePoint);
 
 }  // namespace FontCN32
 '@
+$header = $header.Replace('__GLYPH_WIDTH__', [string]$glyphWidth)
+$header = $header.Replace('__GLYPH_HEIGHT__', [string]$glyphHeight)
 Set-Content -Path $HeaderPath -Value $header -Encoding UTF8
 
 $builder = New-Object System.Text.StringBuilder
@@ -136,10 +199,6 @@ $builder = New-Object System.Text.StringBuilder
 
 for ($index = 0; $index -lt $glyphs.Count; $index++) {
   $glyph = $glyphs[$index]
-  if ($glyph.Bytes.Count -ne 372) {
-    throw "Glyph $index ($($glyph.Char)) has $($glyph.Bytes.Count) bytes, expected 372."
-  }
-
   [void]$builder.AppendLine(("const uint8_t glyph{0}[] PROGMEM = {{" -f $index))
   for ($offset = 0; $offset -lt $glyph.Bytes.Count; $offset += 12) {
     $endOffset = [Math]::Min($offset + 11, $glyph.Bytes.Count - 1)

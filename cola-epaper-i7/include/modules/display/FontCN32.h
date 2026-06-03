@@ -7,8 +7,8 @@
 
 namespace FontCN32 {
 
-constexpr uint8_t kGlyphWidth = 48;
-constexpr uint8_t kGlyphHeight = 62;
+constexpr uint8_t kGlyphWidth = 32;
+constexpr uint8_t kGlyphHeight = 84;
 constexpr uint8_t kBytesPerRow = kGlyphWidth / 8;
 constexpr uint16_t kBytesPerGlyph = kBytesPerRow * kGlyphHeight;
 constexpr int16_t kGlyphAscent = kGlyphHeight;

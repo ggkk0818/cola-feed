@@ -853,7 +853,7 @@ void DisplayModule::renderFontCN16Test() {
 }
 
 void DisplayModule::renderFontCN32Test() {
-  static constexpr char kTestText[] = "温！湿度23:15晴AB吃cd奶时!间";
+  static constexpr char kTestText[] = "ColaFeed";
   display_.setFullWindow();
 
   auto bitmapFonts = createFontCN32Renderer(display_);
