@@ -2,6 +2,7 @@
 #include <Adafruit_NeoPixel.h>
 
 #include "modules/display/DisplayModule.h"
+#include "modules/i2c/I2cModule.h"
 
 namespace {
 constexpr uint8_t RGB_LED_PIN = 27;
@@ -9,9 +10,11 @@ constexpr uint8_t RGB_LED_COUNT = 1;
 }
 
 DisplayModule displayModule;
+I2cModule i2cModule;
 Adafruit_NeoPixel rgbLed(RGB_LED_COUNT, RGB_LED_PIN, NEO_RGB + NEO_KHZ800);
 
 void setup() {
+  i2cModule.begin();
   displayModule.begin();
   displayModule.renderLogo();
   displayModule.renderMainPage();
@@ -26,5 +29,6 @@ void setup() {
 }
 
 void loop() {
-  // Nothing else to run after startup logo render.
+  i2cModule.update();
+  delay(10);
 }
