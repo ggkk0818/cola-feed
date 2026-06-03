@@ -217,9 +217,21 @@ void DisplayModule::begin() {
   display_.setFullWindow();
 }
 
+void DisplayModule::setDeviceOrientation(DeviceOrientation orientation) {
+  if (deviceOrientation_ == orientation) {
+    return;
+  }
+
+  deviceOrientation_ = orientation;
+  display_.setRotation(deviceOrientation_ == DeviceOrientation::kTopEdgeDown ? 2 : 0);
+  forceMainPageFullRefresh_ = true;
+  markAllMainPageRegionsDirty();
+}
+
 void DisplayModule::renderMainPage() {
   if (shouldRenderMainPageFullRefresh()) {
     renderMainPageFullRefresh();
+    forceMainPageFullRefresh_ = false;
     resetMainPageRegionStateAfterFullRefresh();
     hasRenderedMainPage_ = true;
     hibernate();
@@ -363,6 +375,10 @@ const DisplayModule::MainPageRegionState& DisplayModule::getMainPageRegionState(
 }
 
 bool DisplayModule::shouldRenderMainPageFullRefresh() const {
+  if (forceMainPageFullRefresh_) {
+    return true;
+  }
+
   if (!hasRenderedMainPage_) {
     return true;
   }
@@ -751,6 +767,20 @@ void DisplayModule::renderMainPageContentRegion(const MainPageRegionBounds& boun
   drawCenterBitmapText(durationFonts, mainPageContentDuration_, centerX, centerY);
   if (mainPageContentTimestampVisible_ && !mainPageContentTimestamp_.isEmpty()) {
     drawCenterBitmapText(footerFonts, mainPageContentTimestamp_, centerX, footerCenterY);
+  }
+}
+
+void DisplayModule::markAllMainPageRegionsDirty() {
+  const MainPageRegion regions[] = {
+      MainPageRegion::kTop,
+      MainPageRegion::kSidebarOutdoor,
+      MainPageRegion::kSidebarIndoor,
+      MainPageRegion::kSidebarForecast,
+      MainPageRegion::kContent,
+  };
+
+  for (MainPageRegion region : regions) {
+    markMainPageRegionDirty(region);
   }
 }
 

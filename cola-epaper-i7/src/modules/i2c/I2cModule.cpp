@@ -44,6 +44,7 @@ constexpr uint32_t kAccelerationPollIntervalMs = 200;
 constexpr uint32_t kEnvironmentPollIntervalMs = 2000;
 constexpr uint32_t kBatteryPollIntervalMs = 5000;
 constexpr uint32_t kShtc3MeasurementDelayMs = 15;
+constexpr float kOrientationMinAxisMagnitudeG = 0.65f;
 constexpr float kMax17048VoltageResolutionV = 0.000078125f;
 constexpr uint32_t kBatteryTrendWindowMaxMs = 20000;
 constexpr float kChargeCompleteVoltageThresholdV = 4.12f;
@@ -53,6 +54,7 @@ constexpr float kBatteryTrendVoltageDropThresholdV = -0.015f;
 constexpr float kBatteryWakePercentageDeltaThreshold = 0.2f;
 constexpr float kBatteryWakeVoltageDropThresholdV = -0.05f;
 constexpr float kNearFullDischargingVoltageDropThresholdV = -0.03f;
+constexpr float kOrientationDominanceMarginG = 0.15f;
 
 volatile bool gAdxl343InterruptRaised = false;
 
@@ -138,6 +140,10 @@ void I2cModule::update() {
 
 const I2cModule::AccelerationSample& I2cModule::getAccelerationSample() const {
   return accelerationSample_;
+}
+
+I2cModule::DeviceOrientation I2cModule::getDeviceOrientation() const {
+  return deviceOrientation_;
 }
 
 const I2cModule::EnvironmentSample& I2cModule::getEnvironmentSample() const {
@@ -257,6 +263,7 @@ void I2cModule::updateAcceleration(uint32_t nowMs) {
   AccelerationSample sample;
   if (readAdxl343Acceleration(sample, nowMs)) {
     accelerationSample_ = sample;
+    deviceOrientation_ = inferDeviceOrientation(sample);
   }
   lastAccelerationPollMs_ = nowMs;
 }
@@ -309,6 +316,29 @@ bool I2cModule::readAdxl343Acceleration(AccelerationSample& sample, uint32_t now
   sample.zG = static_cast<float>(rawZ) * kAdxl343ScaleFactorG;
   sample.timestampMs = nowMs;
   return true;
+}
+
+I2cModule::DeviceOrientation I2cModule::inferDeviceOrientation(
+    const AccelerationSample& sample) const {
+  if (!isFiniteFloat(sample.xG) || !isFiniteFloat(sample.yG) || !isFiniteFloat(sample.zG)) {
+    return deviceOrientation_;
+  }
+
+  const float absX = std::fabs(sample.xG);
+  const float absY = std::fabs(sample.yG);
+  const float absZ = std::fabs(sample.zG);
+  const bool xIsDominant = absX >= kOrientationMinAxisMagnitudeG &&
+                           absX >= (absY + kOrientationDominanceMarginG) &&
+                           absX >= (absZ + kOrientationDominanceMarginG);
+  if (!xIsDominant) {
+    return deviceOrientation_;
+  }
+
+  if (sample.xG > 0.0f) {
+    return DeviceOrientation::kTopEdgeDown;
+  }
+
+  return DeviceOrientation::kBottomEdgeDown;
 }
 
 bool I2cModule::readShtc3Environment(EnvironmentSample& sample, uint32_t nowMs) {

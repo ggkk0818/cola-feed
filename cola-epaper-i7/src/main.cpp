@@ -52,6 +52,19 @@ void bindBatteryState(DisplayModule& displayModule, const I2cModule& i2cModule) 
                                          isCharging, isPowerConnected);
 }
 
+void bindDeviceOrientation(DisplayModule& displayModule, const I2cModule& i2cModule) {
+  switch (i2cModule.getDeviceOrientation()) {
+    case I2cModule::DeviceOrientation::kBottomEdgeDown:
+      displayModule.setDeviceOrientation(DisplayModule::DeviceOrientation::kBottomEdgeDown);
+      return;
+    case I2cModule::DeviceOrientation::kTopEdgeDown:
+      displayModule.setDeviceOrientation(DisplayModule::DeviceOrientation::kTopEdgeDown);
+      return;
+    case I2cModule::DeviceOrientation::kUnknown:
+      return;
+  }
+}
+
 void bindIndoorEnvironment(DisplayModule& displayModule, const I2cModule& i2cModule) {
   const I2cModule::EnvironmentSample& environment = i2cModule.getEnvironmentSample();
   WeatherData::IndoorEnvironmentData indoor;
@@ -103,6 +116,7 @@ void setup() {
   bleGatewayClient.begin();
   displayModule.begin();
   displayModule.renderLogo();
+  bindDeviceOrientation(displayModule, i2cModule);
   displayModule.renderMainPage();
 
   rgbLed.begin();
@@ -117,6 +131,7 @@ void setup() {
 void loop() {
   i2cModule.update();
   bleGatewayClient.update();
+  bindDeviceOrientation(displayModule, i2cModule);
   bindBatteryState(displayModule, i2cModule);
   bindIndoorEnvironment(displayModule, i2cModule);
   bindFeedState(displayModule, bleGatewayClient);

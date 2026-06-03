@@ -17,6 +17,12 @@ class I2cModule {
     uint32_t timestampMs = 0;
   };
 
+  enum class DeviceOrientation : uint8_t {
+    kUnknown,
+    kBottomEdgeDown,
+    kTopEdgeDown,
+  };
+
   enum class BatteryPowerState : uint8_t {
     kUnknown,
     kDischarging,
@@ -45,6 +51,7 @@ class I2cModule {
   void update();
 
   const AccelerationSample& getAccelerationSample() const;
+  DeviceOrientation getDeviceOrientation() const;
   const EnvironmentSample& getEnvironmentSample() const;
   const BatterySample& getBatterySample() const;
   const SensorAvailability& getAvailability() const;
@@ -80,6 +87,7 @@ class I2cModule {
   bool readAdxl343Acceleration(AccelerationSample& sample, uint32_t nowMs);
   bool readShtc3Environment(EnvironmentSample& sample, uint32_t nowMs);
   bool readMax17048Battery(BatterySample& sample, uint32_t nowMs);
+  DeviceOrientation inferDeviceOrientation(const AccelerationSample& sample) const;
 
   void resetBatteryHistory();
   void recordBatteryHistory(float percentage, float voltageV, uint32_t timestampMs);
@@ -95,6 +103,7 @@ class I2cModule {
   bool activityEventLatched_ = false;
   SensorAvailability availability_{};
   AccelerationSample accelerationSample_{};
+  DeviceOrientation deviceOrientation_ = DeviceOrientation::kUnknown;
   EnvironmentSample environmentSample_{};
   BatterySample batterySample_{};
   BatteryHistoryEntry batteryHistory_[kBatteryHistorySize]{};

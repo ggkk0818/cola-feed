@@ -7,10 +7,16 @@
 
 class DisplayModule {
  public:
+  enum class DeviceOrientation : uint8_t {
+    kBottomEdgeDown,
+    kTopEdgeDown,
+  };
+
   DisplayModule();
 
   void begin();
   void renderMainPage();
+  void setDeviceOrientation(DeviceOrientation orientation);
   void setMainPageBatteryStatus(uint8_t batteryPercentage, bool isCharging,
                                 bool isPowerConnected);
   void setMainPageTopTime(const String& topTimeText);
@@ -78,6 +84,7 @@ class DisplayModule {
   void renderMainPageSidebarIndoorRegion(const MainPageRegionBounds& bounds);
   void renderMainPageSidebarForecastRegion(const MainPageRegionBounds& bounds);
   void renderMainPageContentRegion(const MainPageRegionBounds& bounds);
+  void markAllMainPageRegionsDirty();
   void updateMainPageRegionStateAfterRefresh(MainPageRegion region, bool fullRefresh);
   void resetMainPageRegionStateAfterFullRefresh();
   void markMainPageRegionDirty(MainPageRegion region, bool willDrawRed = false);
@@ -96,5 +103,7 @@ class DisplayModule {
   String mainPageContentTimestamp_;
   bool mainPageContentTimestampVisible_ = false;
   WeatherData::SidebarWeatherData sidebarWeatherData_;
+  DeviceOrientation deviceOrientation_ = DeviceOrientation::kBottomEdgeDown;
+  bool forceMainPageFullRefresh_ = false;
   bool hasRenderedMainPage_ = false;
 };
