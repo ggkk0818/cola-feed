@@ -54,7 +54,7 @@ class I2cModule {
   bool consumeActivityEvent();
 
  private:
-  static constexpr size_t kBatteryHistorySize = 6;
+    static constexpr size_t kBatteryHistorySize = 4;
 
   struct BatteryHistoryEntry {
     float percentage = NAN;
@@ -81,8 +81,13 @@ class I2cModule {
   bool readShtc3Environment(EnvironmentSample& sample, uint32_t nowMs);
   bool readMax17048Battery(BatterySample& sample, uint32_t nowMs);
 
+  void resetBatteryHistory();
   void recordBatteryHistory(float percentage, float voltageV, uint32_t timestampMs);
   float computeBatteryPercentageRatePerHour() const;
+  float computeBatteryVoltageDelta() const;
+  bool hasBatteryTrendWindow() const;
+  bool shouldResetBatteryHistory(uint32_t timestampMs) const;
+  BatteryPowerState inferBatteryPowerStateAfterWake(float percentage, float voltageV) const;
   BatteryPowerState inferBatteryPowerState(float percentage, float voltageV,
                                            float percentageRatePerHour) const;
 
@@ -93,8 +98,10 @@ class I2cModule {
   EnvironmentSample environmentSample_{};
   BatterySample batterySample_{};
   BatteryHistoryEntry batteryHistory_[kBatteryHistorySize]{};
+  BatteryHistoryEntry batteryWakeBaseline_{};
   size_t batteryHistoryCount_ = 0;
   size_t batteryHistoryNextIndex_ = 0;
+  bool batteryWakeRecoveryActive_ = false;
   uint32_t lastAccelerationPollMs_ = 0;
   uint32_t lastEnvironmentPollMs_ = 0;
   uint32_t lastBatteryPollMs_ = 0;

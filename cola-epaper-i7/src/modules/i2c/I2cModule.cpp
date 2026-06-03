@@ -45,10 +45,14 @@ constexpr uint32_t kEnvironmentPollIntervalMs = 2000;
 constexpr uint32_t kBatteryPollIntervalMs = 5000;
 constexpr uint32_t kShtc3MeasurementDelayMs = 15;
 constexpr float kMax17048VoltageResolutionV = 0.000078125f;
-constexpr float kChargingRateThresholdPercentPerHour = 0.12f;
-constexpr float kDischargingRateThresholdPercentPerHour = -0.08f;
+constexpr uint32_t kBatteryTrendWindowMaxMs = 20000;
 constexpr float kChargeCompleteVoltageThresholdV = 4.12f;
 constexpr float kChargeCompletePercentageThreshold = 99.0f;
+constexpr float kBatteryTrendVoltageRiseThresholdV = 0.012f;
+constexpr float kBatteryTrendVoltageDropThresholdV = -0.015f;
+constexpr float kBatteryWakePercentageDeltaThreshold = 0.2f;
+constexpr float kBatteryWakeVoltageDropThresholdV = -0.05f;
+constexpr float kNearFullDischargingVoltageDropThresholdV = -0.03f;
 
 volatile bool gAdxl343InterruptRaised = false;
 
@@ -358,11 +362,29 @@ bool I2cModule::readMax17048Battery(BatterySample& sample, uint32_t nowMs) {
                                            static_cast<float>(rawSoc & 0xFFu) / 256.0f);
   const float voltageV = static_cast<float>(rawVcell) * kMax17048VoltageResolutionV;
 
+  if (shouldResetBatteryHistory(nowMs)) {
+    batteryWakeBaseline_.percentage = batterySample_.percentage;
+    batteryWakeBaseline_.voltageV = batterySample_.voltageV;
+    batteryWakeBaseline_.timestampMs = batterySample_.timestampMs;
+    batteryWakeRecoveryActive_ = true;
+    resetBatteryHistory();
+  }
+
   recordBatteryHistory(percentage, voltageV, nowMs);
 
   const float percentageRatePerHour = computeBatteryPercentageRatePerHour();
-  const BatteryPowerState powerState =
-      inferBatteryPowerState(percentage, voltageV, percentageRatePerHour);
+  BatteryPowerState powerState = inferBatteryPowerState(percentage, voltageV, percentageRatePerHour);
+  if (batteryWakeRecoveryActive_) {
+    const BatteryPowerState wakePowerState = inferBatteryPowerStateAfterWake(percentage, voltageV);
+    if (wakePowerState != BatteryPowerState::kUnknown) {
+      powerState = wakePowerState;
+    }
+
+    if (hasBatteryTrendWindow()) {
+      batteryWakeRecoveryActive_ = false;
+      batteryWakeBaseline_ = BatteryHistoryEntry{};
+    }
+  }
 
   sample.percentage = percentage;
   sample.voltageV = voltageV;
@@ -373,6 +395,14 @@ bool I2cModule::readMax17048Battery(BatterySample& sample, uint32_t nowMs) {
       powerState == BatteryPowerState::kChargeCompletePowerConnected;
   sample.timestampMs = nowMs;
   return true;
+}
+
+void I2cModule::resetBatteryHistory() {
+  batteryHistoryCount_ = 0;
+  batteryHistoryNextIndex_ = 0;
+  for (BatteryHistoryEntry& entry : batteryHistory_) {
+    entry = BatteryHistoryEntry{};
+  }
 }
 
 void I2cModule::recordBatteryHistory(float percentage, float voltageV, uint32_t timestampMs) {
@@ -386,11 +416,11 @@ void I2cModule::recordBatteryHistory(float percentage, float voltageV, uint32_t 
 }
 
 float I2cModule::computeBatteryPercentageRatePerHour() const {
-  if (batteryHistoryCount_ < 2) {
+  if (!hasBatteryTrendWindow()) {
     return 0.0f;
   }
 
-  const size_t oldestIndex = batteryHistoryCount_ == kBatteryHistorySize ? batteryHistoryNextIndex_ : 0;
+  const size_t oldestIndex = batteryHistoryNextIndex_;
   const size_t newestIndex =
       (batteryHistoryNextIndex_ + kBatteryHistorySize - 1u) % kBatteryHistorySize;
   const BatteryHistoryEntry& oldest = batteryHistory_[oldestIndex];
@@ -409,26 +439,113 @@ float I2cModule::computeBatteryPercentageRatePerHour() const {
   return (newest.percentage - oldest.percentage) / elapsedHours;
 }
 
+float I2cModule::computeBatteryVoltageDelta() const {
+  if (!hasBatteryTrendWindow()) {
+    return NAN;
+  }
+
+  const size_t oldestIndex = batteryHistoryNextIndex_;
+  const size_t newestIndex =
+      (batteryHistoryNextIndex_ + kBatteryHistorySize - 1u) % kBatteryHistorySize;
+  const BatteryHistoryEntry& oldest = batteryHistory_[oldestIndex];
+  const BatteryHistoryEntry& newest = batteryHistory_[newestIndex];
+  if (!isFiniteFloat(oldest.voltageV) || !isFiniteFloat(newest.voltageV)) {
+    return NAN;
+  }
+
+  return newest.voltageV - oldest.voltageV;
+}
+
+bool I2cModule::hasBatteryTrendWindow() const {
+  if (batteryHistoryCount_ < kBatteryHistorySize) {
+    return false;
+  }
+
+  const size_t oldestIndex = batteryHistoryNextIndex_;
+  const size_t newestIndex =
+      (batteryHistoryNextIndex_ + kBatteryHistorySize - 1u) % kBatteryHistorySize;
+  const BatteryHistoryEntry& oldest = batteryHistory_[oldestIndex];
+  const BatteryHistoryEntry& newest = batteryHistory_[newestIndex];
+  if (newest.timestampMs <= oldest.timestampMs) {
+    return false;
+  }
+
+  return (newest.timestampMs - oldest.timestampMs) <= kBatteryTrendWindowMaxMs;
+}
+
+bool I2cModule::shouldResetBatteryHistory(uint32_t timestampMs) const {
+  return batterySample_.timestampMs != 0 && timestampMs > batterySample_.timestampMs &&
+         (timestampMs - batterySample_.timestampMs) > kBatteryTrendWindowMaxMs;
+}
+
+I2cModule::BatteryPowerState I2cModule::inferBatteryPowerStateAfterWake(float percentage,
+                                                                        float voltageV) const {
+  if (!isFiniteFloat(percentage) || !isFiniteFloat(voltageV)) {
+    return BatteryPowerState::kUnknown;
+  }
+
+  const bool nearFull = percentage >= kChargeCompletePercentageThreshold &&
+                        voltageV >= kChargeCompleteVoltageThresholdV;
+  if (nearFull) {
+    return BatteryPowerState::kChargeCompletePowerConnected;
+  }
+
+  if (isFiniteFloat(batteryWakeBaseline_.percentage)) {
+    const float percentageDelta = percentage - batteryWakeBaseline_.percentage;
+    if (percentageDelta >= kBatteryWakePercentageDeltaThreshold) {
+      return BatteryPowerState::kCharging;
+    }
+    if (percentageDelta <= -kBatteryWakePercentageDeltaThreshold) {
+      return BatteryPowerState::kDischarging;
+    }
+  }
+
+  if (isFiniteFloat(batteryWakeBaseline_.voltageV) &&
+      (voltageV - batteryWakeBaseline_.voltageV) <= kBatteryWakeVoltageDropThresholdV) {
+    return BatteryPowerState::kDischarging;
+  }
+
+  if (hasBatteryTrendWindow()) {
+    return inferBatteryPowerState(percentage, voltageV, computeBatteryPercentageRatePerHour());
+  }
+
+  return BatteryPowerState::kUnknown;
+}
+
 I2cModule::BatteryPowerState I2cModule::inferBatteryPowerState(
     float percentage, float voltageV, float percentageRatePerHour) const {
   if (!isFiniteFloat(percentage) || !isFiniteFloat(voltageV)) {
     return BatteryPowerState::kUnknown;
   }
 
-  if (percentageRatePerHour >= kChargingRateThresholdPercentPerHour) {
-    return BatteryPowerState::kCharging;
-  }
-
   const bool nearFull = percentage >= kChargeCompletePercentageThreshold &&
                         voltageV >= kChargeCompleteVoltageThresholdV;
-  if (nearFull && percentageRatePerHour >= -0.03f) {
+
+  if (nearFull) {
+    const float voltageDeltaV = computeBatteryVoltageDelta();
+    if (hasBatteryTrendWindow() && isFiniteFloat(voltageDeltaV) &&
+        voltageDeltaV <= kNearFullDischargingVoltageDropThresholdV) {
+      return BatteryPowerState::kDischarging;
+    }
+
     return BatteryPowerState::kChargeCompletePowerConnected;
   }
 
-  if (percentageRatePerHour <= kDischargingRateThresholdPercentPerHour) {
+  if (!hasBatteryTrendWindow()) {
+    return BatteryPowerState::kUnknown;
+  }
+
+  const float voltageDeltaV = computeBatteryVoltageDelta();
+
+  if (isFiniteFloat(voltageDeltaV) && voltageDeltaV >= kBatteryTrendVoltageRiseThresholdV &&
+      percentageRatePerHour >= 0.0f) {
+    return BatteryPowerState::kCharging;
+  }
+
+  if (isFiniteFloat(voltageDeltaV) && voltageDeltaV <= kBatteryTrendVoltageDropThresholdV &&
+      percentageRatePerHour <= 0.0f) {
     return BatteryPowerState::kDischarging;
   }
 
-  return nearFull ? BatteryPowerState::kChargeCompletePowerConnected
-                  : BatteryPowerState::kUnknown;
+  return BatteryPowerState::kUnknown;
 }
