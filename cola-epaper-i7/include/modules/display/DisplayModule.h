@@ -13,11 +13,14 @@ class DisplayModule {
   void renderMainPage();
   void setMainPageBatteryStatus(uint8_t batteryPercentage, bool isCharging,
                                 bool isPowerConnected);
+  void setMainPageTopTime(const String& topTimeText);
   void setMainPageSidebarWeatherData(const WeatherData::SidebarWeatherData& data);
   void setMainPageOutdoorEnvironmentData(const WeatherData::OutdoorEnvironmentData& data);
   void setMainPageIndoorEnvironmentData(const WeatherData::IndoorEnvironmentData& data);
   void setMainPageForecastData(const WeatherData::DailyForecastData* forecastDays,
                                size_t forecastDayCount);
+  void setMainPageContentData(const String& durationText, const String& timestampText,
+                              bool showTimestamp);
   void renderLowBattery();
   void renderLogo();
   void renderFontCN16Test();
@@ -88,6 +91,10 @@ class DisplayModule {
   uint8_t mainPageBatteryPercentage_ = 70;
   bool mainPageCharging_ = true;
   bool mainPagePowerConnected_ = true;
+  String mainPageTopTime_ = "--:--";
+  String mainPageContentDuration_ = "--";
+  String mainPageContentTimestamp_;
+  bool mainPageContentTimestampVisible_ = false;
   WeatherData::SidebarWeatherData sidebarWeatherData_;
   bool hasRenderedMainPage_ = false;
 };

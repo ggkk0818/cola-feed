@@ -15,6 +15,7 @@
 #include "modules/display/weather-icons/102.h"
 #include "modules/display/weather-icons/103.h"
 #include "modules/display/weather-icons/104.h"
+#include "modules/display/weather-icons/999.h"
 
 namespace {
 constexpr uint8_t EPD_SCK_PIN = 14;
@@ -44,10 +45,7 @@ constexpr int16_t kBatteryStatusTopMargin = 5;
 constexpr int16_t kBatteryStatusRightMargin = 5;
 constexpr int16_t kBatteryStatusAuxIconSize = 24;
 constexpr int16_t kBatteryStatusAuxIconGap = 4;
-constexpr char kMainPageTopTimeText[] = "22:00";
 constexpr char kMainPageContentTitleText[] = "距离上次吃奶";
-constexpr char kMainPageContentDurationText[] = "--";
-constexpr char kMainPageContentTimestampText[] = "2026-06-02 15:59:02";
 
 struct BitmapAsset {
   const uint8_t* bitmap;
@@ -57,36 +55,17 @@ struct BitmapAsset {
 
 WeatherData::SidebarWeatherData createMockSidebarWeatherData() {
   WeatherData::SidebarWeatherData data;
-  data.outdoor.temp = "26";
-  data.outdoor.icon = 100;
-  data.outdoor.text = "晴";
-  data.indoor.temp = "26.1";
-  data.indoor.humidity = "44.5";
-
-  data.forecast[0].fxDate = "2026-06-02";
-  data.forecast[0].tempMax = "28";
-  data.forecast[0].tempMin = "16";
-  data.forecast[0].iconDay = 101;
-  data.forecast[0].textDay = "阴";
-
-  data.forecast[1].fxDate = "2026-06-03";
-  data.forecast[1].tempMax = "28";
-  data.forecast[1].tempMin = "16";
-  data.forecast[1].iconDay = 102;
-  data.forecast[1].textDay = "多云";
-
-  data.forecast[2].fxDate = "2026-06-04";
-  data.forecast[2].tempMax = "28";
-  data.forecast[2].tempMin = "16";
-  data.forecast[2].iconDay = 103;
-  data.forecast[2].textDay = "小雨";
-
-  data.forecast[3].fxDate = "2026-06-05";
-  data.forecast[3].tempMax = "28";
-  data.forecast[3].tempMin = "16";
-  data.forecast[3].iconDay = 104;
-  data.forecast[3].textDay = "大雪";
+  data.outdoor.temp = "--";
+  data.outdoor.icon = 999;
+  data.outdoor.text = "未知";
+  data.indoor.temp = "--";
+  data.indoor.humidity = "--";
   return data;
+}
+
+bool isForecastDataBlank(const WeatherData::DailyForecastData& data) {
+  return data.fxDate.isEmpty() && data.tempMax.isEmpty() && data.tempMin.isEmpty() &&
+         data.iconDay == 0 && data.textDay.isEmpty();
 }
 
 bool isOutdoorEnvironmentDataEqual(const WeatherData::OutdoorEnvironmentData& left,
@@ -123,8 +102,11 @@ bool resolveWeatherIconAsset(uint16_t iconCode, BitmapAsset& asset) {
     case 104:
       asset = BitmapAsset{WeatherIcon104::kBitmap, WeatherIcon104::kWidth, WeatherIcon104::kHeight};
       return true;
+    case 999:
+      asset = BitmapAsset{WeatherIcon999::kBitmap, WeatherIcon999::kWidth, WeatherIcon999::kHeight};
+      return true;
     default:
-      asset = BitmapAsset{WeatherIcon100::kBitmap, WeatherIcon100::kWidth, WeatherIcon100::kHeight};
+      asset = BitmapAsset{WeatherIcon999::kBitmap, WeatherIcon999::kWidth, WeatherIcon999::kHeight};
       return false;
   }
 }
@@ -166,14 +148,26 @@ void drawVerticalDashedLine(DisplayDriver& display, int16_t x, int16_t startY, i
 }
 
 String formatTemperatureValue(const String& temp) {
+  if (temp.isEmpty()) {
+    return String();
+  }
+
   return temp + "°C";
 }
 
 String formatHumidityValue(const String& humidity) {
+  if (humidity.isEmpty()) {
+    return String();
+  }
+
   return humidity + "%";
 }
 
 String formatForecastTemperatureRange(const WeatherData::DailyForecastData& forecast) {
+  if (forecast.tempMin.isEmpty() || forecast.tempMax.isEmpty()) {
+    return String();
+  }
+
   return forecast.tempMin + "~" + forecast.tempMax + "°C";
 }
 
@@ -488,6 +482,15 @@ void DisplayModule::setMainPageBatteryStatus(uint8_t batteryPercentage, bool isC
   markMainPageRegionDirty(MainPageRegion::kTop);
 }
 
+void DisplayModule::setMainPageTopTime(const String& topTimeText) {
+  if (mainPageTopTime_ == topTimeText) {
+    return;
+  }
+
+  mainPageTopTime_ = topTimeText;
+  markMainPageRegionDirty(MainPageRegion::kTop);
+}
+
 void DisplayModule::setMainPageSidebarWeatherData(const WeatherData::SidebarWeatherData& data) {
   const bool outdoorChanged = !isOutdoorEnvironmentDataEqual(sidebarWeatherData_.outdoor, data.outdoor);
   const bool indoorChanged = !isIndoorEnvironmentDataEqual(sidebarWeatherData_.indoor, data.indoor);
@@ -556,6 +559,19 @@ void DisplayModule::setMainPageForecastData(const WeatherData::DailyForecastData
   }
 }
 
+void DisplayModule::setMainPageContentData(const String& durationText, const String& timestampText,
+                                           bool showTimestamp) {
+  if (mainPageContentDuration_ == durationText && mainPageContentTimestamp_ == timestampText &&
+      mainPageContentTimestampVisible_ == showTimestamp) {
+    return;
+  }
+
+  mainPageContentDuration_ = durationText;
+  mainPageContentTimestamp_ = timestampText;
+  mainPageContentTimestampVisible_ = showTimestamp;
+  markMainPageRegionDirty(MainPageRegion::kContent);
+}
+
 void DisplayModule::renderBatteryStatusIcon(int16_t x, int16_t y, uint8_t batteryPercentage) {
   const uint8_t segmentCount = resolveBatterySegmentCount(batteryPercentage);
   const int16_t headHeight = 10;
@@ -596,7 +612,7 @@ void DisplayModule::renderMainPageTopRegion(const MainPageRegionBounds& bounds) 
   int16_t nextAuxIconX = batteryIconX - kBatteryStatusAuxIconGap - kBatteryStatusAuxIconSize;
 
   auto bitmapFonts = createFontCN96Renderer(display_);
-  drawCenterBitmapText(bitmapFonts, String(kMainPageTopTimeText), timeCenterX, timeCenterY);
+  drawCenterBitmapText(bitmapFonts, mainPageTopTime_, timeCenterX, timeCenterY);
 
   if (mainPageCharging_) {
     display_.drawBitmap(nextAuxIconX, auxIconY, ChargingImage24x24::kBitmap,
@@ -687,6 +703,10 @@ void DisplayModule::renderMainPageSidebarForecastRegion(const MainPageRegionBoun
     const MainPageRegionBounds& grid = gridBounds[index];
     const WeatherData::DailyForecastData& forecast = sidebarWeatherData_.forecast[index];
 
+    if (isForecastDataBlank(forecast)) {
+      continue;
+    }
+
     drawLeftBitmapText(labelFonts, formatForecastTitle(index, forecast), grid.x + 5, grid.y + 15);
     drawWeatherIcon(display_, grid.x + 5, grid.y + 35, forecast.iconDay);
     drawLeftBitmapText(labelFonts, forecast.textDay, grid.x + 74, grid.y + 51);
@@ -728,9 +748,10 @@ void DisplayModule::renderMainPageContentRegion(const MainPageRegionBounds& boun
                                 (footerHeight / 2);
 
   drawCenterBitmapText(headerFonts, String(kMainPageContentTitleText), centerX, headerCenterY);
-  drawCenterBitmapText(durationFonts, String(kMainPageContentDurationText), centerX, centerY);
-  drawCenterBitmapText(footerFonts, String(kMainPageContentTimestampText), centerX,
-                       footerCenterY);
+  drawCenterBitmapText(durationFonts, mainPageContentDuration_, centerX, centerY);
+  if (mainPageContentTimestampVisible_ && !mainPageContentTimestamp_.isEmpty()) {
+    drawCenterBitmapText(footerFonts, mainPageContentTimestamp_, centerX, footerCenterY);
+  }
 }
 
 void DisplayModule::updateMainPageRegionStateAfterRefresh(MainPageRegion region,
