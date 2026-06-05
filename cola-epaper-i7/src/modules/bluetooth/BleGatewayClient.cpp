@@ -307,21 +307,11 @@ void BleGatewayClient::handleNotification(const uint8_t* data, size_t length) {
     }
 
     if (expectedTotalChunks_ == 0 || totalChunks != expectedTotalChunks_ || chunkIndex != expectedNextChunkIndex_) {
-      Serial.printf("[BLE] Chunk sequence mismatch: got=%u/%u expectedNext=%u activeTotal=%u\n",
-                    static_cast<unsigned>(chunkIndex),
-                    static_cast<unsigned>(totalChunks),
-                    static_cast<unsigned>(expectedNextChunkIndex_),
-                    static_cast<unsigned>(expectedTotalChunks_));
       resetResponseAssembly();
       return;
     }
 
     responseBuffer_ += chunkPayload;
-    Serial.printf("[BLE] Chunk received: %u/%u, chunkBytes=%u, assembled=%u\n",
-                  static_cast<unsigned>(chunkIndex),
-                  static_cast<unsigned>(totalChunks),
-                  static_cast<unsigned>(chunkPayload.length()),
-                  static_cast<unsigned>(responseBuffer_.length()));
     ++expectedNextChunkIndex_;
 
     if (chunkIndex < totalChunks) {
@@ -334,14 +324,11 @@ void BleGatewayClient::handleNotification(const uint8_t* data, size_t length) {
   FeedData::Payload payload;
   if (!FeedData::parsePayloadJson(responseBuffer_, &payload)) {
     if (packet.startsWith(kFeedChunkPrefix)) {
-      Serial.printf("[BLE] Chunked payload parse failed after %u bytes.\n",
-                    static_cast<unsigned>(responseBuffer_.length()));
       resetResponseAssembly();
     }
     return;
   }
 
-  Serial.printf("[BLE] Feed payload parsed: %u bytes.\n", static_cast<unsigned>(responseBuffer_.length()));
   pendingPayload_ = payload;
   hasPendingPayload_ = true;
 }

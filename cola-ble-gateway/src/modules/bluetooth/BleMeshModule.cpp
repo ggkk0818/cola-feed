@@ -5,6 +5,7 @@
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
+#include <cstring>
 #include <stdio.h>
 
 namespace {
@@ -204,7 +205,13 @@ void BleMeshModule::begin() {
 }
 
 void BleMeshModule::loop() {
-  if (!meshRunning_ || !restartAdvertisingPending_ || bleServer_ == nullptr) {
+  if (!meshRunning_) {
+    return;
+  }
+
+  processPendingBroadcast();
+
+  if (!restartAdvertisingPending_ || bleServer_ == nullptr) {
     return;
   }
 
@@ -325,6 +332,47 @@ String BleMeshModule::buildFeedPayloadJson() const {
   return payload;
 }
 
+void BleMeshModule::processPendingBroadcast() {
+  if (!pendingBroadcastRequest_.pending) {
+    return;
+  }
+
+  char payloadBuffer[kPendingBroadcastPayloadMaxBytes] = {0};
+  const size_t payloadLength = pendingBroadcastRequest_.length;
+  if (payloadLength > 0U) {
+    memcpy(payloadBuffer, pendingBroadcastRequest_.payload, payloadLength);
+  }
+
+  pendingBroadcastRequest_.pending = false;
+  pendingBroadcastRequest_.length = 0;
+  pendingBroadcastRequest_.payload[0] = '\0';
+
+  if (feedDataCharacteristic_ == nullptr) {
+    Serial.println("[BLE] Feed payload notify skipped: feed characteristic unavailable.");
+    return;
+  }
+
+  const String payload(payloadBuffer);
+  DynamicJsonDocument requestDoc(512);
+  const DeserializationError parseError = deserializeJson(requestDoc, payload);
+  if (parseError) {
+    Serial.printf("[BLE] Broadcast JSON parse failed: %s\n", parseError.c_str());
+  }
+  if (!parseError) {
+    const String deviceName = String(requestDoc["device_name"] | "");
+    Serial.printf("[BLE] Broadcast device_name=%s\n", deviceName.c_str());
+    if (!deviceName.isEmpty() && deviceName != "Cola-ePaper") {
+      Serial.printf("[BLE] Broadcast ignored for device_name=%s\n", deviceName.c_str());
+      return;
+    }
+  }
+
+  const String feedPayload = buildFeedPayloadJson();
+  if (!notifyFeedPayloadInChunks(feedDataCharacteristic_, feedPayload)) {
+    Serial.println("[BLE] Feed payload notify failed: feed characteristic unavailable.");
+  }
+}
+
 void BleMeshModule::onClientConnected() {
   ++clientCount_;
   updateScreen();
@@ -351,24 +399,22 @@ void BleMeshModule::onClientBroadcast(const String& payload) {
                 static_cast<unsigned>(payload.length()),
                 payload.c_str());
 
-  DynamicJsonDocument requestDoc(512);
-  const DeserializationError parseError = deserializeJson(requestDoc, payload);
-  if (parseError) {
-    Serial.printf("[BLE] Broadcast JSON parse failed: %s\n", parseError.c_str());
-  }
-  if (!parseError) {
-    const String deviceName = String(requestDoc["device_name"] | "");
-    Serial.printf("[BLE] Broadcast device_name=%s\n", deviceName.c_str());
-    if (!deviceName.isEmpty() && deviceName != "Cola-ePaper") {
-      Serial.printf("[BLE] Broadcast ignored for device_name=%s\n", deviceName.c_str());
-      return;
-    }
+  if (payload.length() >= kPendingBroadcastPayloadMaxBytes) {
+    Serial.printf("[BLE] Broadcast ignored: payload too large for queue (%u >= %u)\n",
+                  static_cast<unsigned>(payload.length()),
+                  static_cast<unsigned>(kPendingBroadcastPayloadMaxBytes));
+    return;
   }
 
-  const String feedPayload = buildFeedPayloadJson();
-  if (!notifyFeedPayloadInChunks(feedDataCharacteristic_, feedPayload)) {
-    Serial.println("[BLE] Feed payload notify failed: feed characteristic unavailable.");
+  if (pendingBroadcastRequest_.pending) {
+    Serial.println("[BLE] Broadcast ignored: previous request still pending.");
+    return;
   }
+
+  memcpy(pendingBroadcastRequest_.payload, payload.c_str(), payload.length());
+  pendingBroadcastRequest_.payload[payload.length()] = '\0';
+  pendingBroadcastRequest_.length = static_cast<size_t>(payload.length());
+  pendingBroadcastRequest_.pending = true;
 }
 
 void BleMeshModule::updateScreen() const {

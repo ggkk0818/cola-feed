@@ -30,6 +30,8 @@ class BleMeshModule {
   void onClientBroadcast(const String& payload);
 
  private:
+  static constexpr size_t kPendingBroadcastPayloadMaxBytes = 128U;
+
   struct FeedSyncCache {
     String sourceServerTime;
     uint32_t receivedAtMs = 0;
@@ -38,11 +40,18 @@ class BleMeshModule {
     bool weatherDataIsNull = true;
   };
 
+  struct PendingBroadcastRequest {
+    char payload[kPendingBroadcastPayloadMaxBytes] = {0};
+    size_t length = 0;
+    bool pending = false;
+  };
+
   void startMesh();
   void stopMesh();
 
   void refreshFeedCache();
   String buildFeedPayloadJson() const;
+  void processPendingBroadcast();
 
   void updateScreen() const;
 
@@ -58,4 +67,5 @@ class BleMeshModule {
   uint16_t clientCount_ = 0;
 
   FeedSyncCache feedCache_;
+  PendingBroadcastRequest pendingBroadcastRequest_;
 };
