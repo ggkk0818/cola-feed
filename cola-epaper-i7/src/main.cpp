@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <Adafruit_NeoPixel.h>
 
 #include <cmath>
 
@@ -9,8 +8,6 @@
 #include "modules/i2c/I2cModule.h"
 
 namespace {
-constexpr uint8_t RGB_LED_PIN = 27;
-constexpr uint8_t RGB_LED_COUNT = 1;
 
 String formatSensorValue(float value, uint8_t decimals) {
   if (!std::isfinite(value)) {
@@ -109,7 +106,6 @@ void bindFeedState(DisplayModule& displayModule, const BleGatewayClient& bleGate
 DisplayModule displayModule;
 I2cModule i2cModule;
 BleGatewayClient bleGatewayClient;
-Adafruit_NeoPixel rgbLed(RGB_LED_COUNT, RGB_LED_PIN, NEO_RGB + NEO_KHZ800);
 
 void setup() {
   i2cModule.begin();
@@ -117,15 +113,6 @@ void setup() {
   displayModule.begin();
   displayModule.renderLogo();
   bindDeviceOrientation(displayModule, i2cModule);
-  displayModule.renderMainPage();
-
-  rgbLed.begin();
-  rgbLed.clear();
-  rgbLed.setPixelColor(0, rgbLed.Color(55, 255, 55));
-  rgbLed.show();
-  delay(1000);
-  rgbLed.clear();
-  rgbLed.show();
 }
 
 void loop() {

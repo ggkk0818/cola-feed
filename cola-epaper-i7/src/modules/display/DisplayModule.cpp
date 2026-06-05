@@ -865,40 +865,6 @@ void DisplayModule::renderLogo() {
   hibernate();
 }
 
-void DisplayModule::renderFontCN16Test() {
-  static constexpr char kTestText[] = "温！湿度23:15晴AB吃cd奶时!间";
-  display_.setFullWindow();
-
-  auto bitmapFonts = createFontCN16Renderer(display_);
-  const int16_t centerX = display_.width() / 2;
-  const int16_t centerY = display_.height() / 2;
-
-  display_.firstPage();
-  do {
-    display_.fillScreen(GxEPD_WHITE);
-    drawCenterBitmapText(bitmapFonts, String(kTestText), centerX, centerY);
-  } while (display_.nextPage());
-
-  hibernate();
-}
-
-void DisplayModule::renderFontCN32Test() {
-  static constexpr char kTestText[] = "ColaFeed";
-  display_.setFullWindow();
-
-  auto bitmapFonts = createFontCN32Renderer(display_);
-  const int16_t centerX = display_.width() / 2;
-  const int16_t centerY = display_.height() / 2;
-
-  display_.firstPage();
-  do {
-    display_.fillScreen(GxEPD_WHITE);
-    drawCenterBitmapText(bitmapFonts, String(kTestText), centerX, centerY);
-  } while (display_.nextPage());
-
-  hibernate();
-}
-
 void DisplayModule::hibernate() {
   display_.hibernate();
 }

@@ -29,8 +29,6 @@ class DisplayModule {
                               bool showTimestamp);
   void renderLowBattery();
   void renderLogo();
-  void renderFontCN16Test();
-  void renderFontCN32Test();
   void hibernate();
 
  private:
