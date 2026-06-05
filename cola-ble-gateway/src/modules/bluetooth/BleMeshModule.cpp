@@ -13,6 +13,8 @@ constexpr const char* kBleDeviceName = "Cola-gateway-mesh";
 constexpr const char* kFeedServiceUuid = "4e6a1000-5c4f-45af-8f1f-c41c01ab1000";
 constexpr const char* kFeedDataCharacteristicUuid = "4e6a1001-5c4f-45af-8f1f-c41c01ab1001";
 constexpr const char* kBroadcastCharacteristicUuid = "4e6a1002-5c4f-45af-8f1f-c41c01ab1002";
+constexpr const char* kFeedChunkPrefix = "CF1|";
+constexpr size_t kFeedChunkPayloadBytes = 480U;
 
 struct DateTimeParts {
   int year = 0;
@@ -123,6 +125,37 @@ String buildCurrentServerTime(const String& sourceServerTime, uint32_t receivedA
   const unsigned long elapsedSeconds = (millis() - receivedAtMs) / 1000UL;
   addSeconds(&dateTime, elapsedSeconds);
   return formatDateTime(dateTime);
+}
+
+bool notifyFeedPayloadInChunks(BLECharacteristic* characteristic, const String& payload) {
+  if (characteristic == nullptr) {
+    return false;
+  }
+
+  const size_t payloadLength = static_cast<size_t>(payload.length());
+  const size_t totalChunks = payloadLength == 0U ? 1U : ((payloadLength + kFeedChunkPayloadBytes - 1U) / kFeedChunkPayloadBytes);
+
+  Serial.printf("[BLE] Notify feed payload: length=%u, chunkPayload=%u, chunks=%u\n",
+                static_cast<unsigned>(payloadLength),
+                static_cast<unsigned>(kFeedChunkPayloadBytes),
+                static_cast<unsigned>(totalChunks));
+
+  for (size_t chunkIndex = 0; chunkIndex < totalChunks; ++chunkIndex) {
+    const size_t offset = chunkIndex * kFeedChunkPayloadBytes;
+    const size_t remainingBytes = payloadLength > offset ? (payloadLength - offset) : 0U;
+    const size_t chunkLength = remainingBytes > kFeedChunkPayloadBytes ? kFeedChunkPayloadBytes : remainingBytes;
+    String packet = String(kFeedChunkPrefix) + String(static_cast<unsigned>(chunkIndex + 1U)) + '|' +
+                    String(static_cast<unsigned>(totalChunks)) + '|';
+    if (chunkLength > 0U) {
+      packet += payload.substring(offset, offset + chunkLength);
+    }
+
+    characteristic->setValue(packet.c_str());
+    characteristic->notify();
+  }
+
+  Serial.println("[BLE] Feed payload notified in chunks.");
+  return true;
 }
 
 class BleServerCallbacks : public BLEServerCallbacks {
@@ -333,10 +366,9 @@ void BleMeshModule::onClientBroadcast(const String& payload) {
   }
 
   const String feedPayload = buildFeedPayloadJson();
-  Serial.printf("[BLE] Notify feed payload: length=%u\n", static_cast<unsigned>(feedPayload.length()));
-  feedDataCharacteristic_->setValue(feedPayload.c_str());
-  feedDataCharacteristic_->notify();
-  Serial.println("[BLE] Feed payload notified.");
+  if (!notifyFeedPayloadInChunks(feedDataCharacteristic_, feedPayload)) {
+    Serial.println("[BLE] Feed payload notify failed: feed characteristic unavailable.");
+  }
 }
 
 void BleMeshModule::updateScreen() const {

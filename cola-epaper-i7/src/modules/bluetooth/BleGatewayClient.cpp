@@ -15,6 +15,7 @@ constexpr const char* kGatewayRequestDeviceName = "Cola-ePaper";
 constexpr const char* kFeedServiceUuid = "4e6a1000-5c4f-45af-8f1f-c41c01ab1000";
 constexpr const char* kFeedDataCharacteristicUuid = "4e6a1001-5c4f-45af-8f1f-c41c01ab1001";
 constexpr const char* kBroadcastCharacteristicUuid = "4e6a1002-5c4f-45af-8f1f-c41c01ab1002";
+constexpr const char* kFeedChunkPrefix = "CF1|";
 
 constexpr uint32_t kFeedPollIntervalMs = 60000UL;
 constexpr uint32_t kRequestTimeoutMs = 10000UL;
@@ -27,6 +28,59 @@ void onGatewayNotify(BLERemoteCharacteristic* /*characteristic*/, uint8_t* data,
   if (gBleGatewayClientInstance != nullptr) {
     gBleGatewayClientInstance->handleNotification(data, length);
   }
+}
+
+bool parsePositiveUint16(const String& value, uint16_t* result) {
+  if (result == nullptr || value.isEmpty()) {
+    return false;
+  }
+
+  unsigned long parsedValue = 0UL;
+  for (size_t index = 0; index < static_cast<size_t>(value.length()); ++index) {
+    const char currentChar = value[index];
+    if (currentChar < '0' || currentChar > '9') {
+      return false;
+    }
+
+    parsedValue = (parsedValue * 10UL) + static_cast<unsigned long>(currentChar - '0');
+    if (parsedValue > 65535UL) {
+      return false;
+    }
+  }
+
+  if (parsedValue == 0UL) {
+    return false;
+  }
+
+  *result = static_cast<uint16_t>(parsedValue);
+  return true;
+}
+
+bool parseChunkPacket(const String& packet, uint16_t* chunkIndex, uint16_t* totalChunks, String* chunkPayload) {
+  if (chunkIndex == nullptr || totalChunks == nullptr || chunkPayload == nullptr ||
+      !packet.startsWith(kFeedChunkPrefix)) {
+    return false;
+  }
+
+  const int firstSeparator = packet.indexOf('|', 4);
+  if (firstSeparator < 0) {
+    return false;
+  }
+
+  const int secondSeparator = packet.indexOf('|', firstSeparator + 1);
+  if (secondSeparator < 0) {
+    return false;
+  }
+
+  const String chunkIndexText = packet.substring(4, firstSeparator);
+  const String totalChunksText = packet.substring(firstSeparator + 1, secondSeparator);
+  if (!parsePositiveUint16(chunkIndexText, chunkIndex) || !parsePositiveUint16(totalChunksText, totalChunks) ||
+      *chunkIndex > *totalChunks) {
+    return false;
+  }
+
+  *chunkPayload = packet.substring(secondSeparator + 1);
+  return true;
 }
 
 }  // namespace
@@ -109,7 +163,7 @@ void BleGatewayClient::beginRequest() {
   status_.timedOut = false;
   status_.requestStartedMs = millis();
   gatewayAddress_.remove(0);
-  responseBuffer_.remove(0);
+  resetResponseAssembly();
   hasPendingPayload_ = false;
   lastScanAttemptMs_ = 0;
   disconnectClient();
@@ -134,7 +188,7 @@ void BleGatewayClient::completeRequestTimeout() {
   status_.requestInFlight = false;
   status_.timedOut = true;
   status_.requestStartedMs = 0;
-  responseBuffer_.remove(0);
+  resetResponseAssembly();
   hasPendingPayload_ = false;
   nextRequestDueMs_ = millis() + kFeedPollIntervalMs;
   disconnectClient();
@@ -210,10 +264,17 @@ bool BleGatewayClient::connectAndRequest() {
   return true;
 }
 
+void BleGatewayClient::resetResponseAssembly() {
+  responseBuffer_.remove(0);
+  expectedNextChunkIndex_ = 1;
+  expectedTotalChunks_ = 0;
+}
+
 void BleGatewayClient::disconnectClient() {
   feedDataCharacteristic_ = nullptr;
   broadcastCharacteristic_ = nullptr;
   gBleGatewayClientInstance = nullptr;
+  resetResponseAssembly();
 
   if (client_ != nullptr) {
     if (client_->isConnected()) {
@@ -230,15 +291,57 @@ void BleGatewayClient::handleNotification(const uint8_t* data, size_t length) {
     return;
   }
 
+  String packet;
+  packet.reserve(length);
   for (size_t index = 0; index < length; ++index) {
-    responseBuffer_ += static_cast<char>(data[index]);
+    packet += static_cast<char>(data[index]);
+  }
+
+  uint16_t chunkIndex = 0;
+  uint16_t totalChunks = 0;
+  String chunkPayload;
+  if (parseChunkPacket(packet, &chunkIndex, &totalChunks, &chunkPayload)) {
+    if (chunkIndex == 1) {
+      resetResponseAssembly();
+      expectedTotalChunks_ = totalChunks;
+    }
+
+    if (expectedTotalChunks_ == 0 || totalChunks != expectedTotalChunks_ || chunkIndex != expectedNextChunkIndex_) {
+      Serial.printf("[BLE] Chunk sequence mismatch: got=%u/%u expectedNext=%u activeTotal=%u\n",
+                    static_cast<unsigned>(chunkIndex),
+                    static_cast<unsigned>(totalChunks),
+                    static_cast<unsigned>(expectedNextChunkIndex_),
+                    static_cast<unsigned>(expectedTotalChunks_));
+      resetResponseAssembly();
+      return;
+    }
+
+    responseBuffer_ += chunkPayload;
+    Serial.printf("[BLE] Chunk received: %u/%u, chunkBytes=%u, assembled=%u\n",
+                  static_cast<unsigned>(chunkIndex),
+                  static_cast<unsigned>(totalChunks),
+                  static_cast<unsigned>(chunkPayload.length()),
+                  static_cast<unsigned>(responseBuffer_.length()));
+    ++expectedNextChunkIndex_;
+
+    if (chunkIndex < totalChunks) {
+      return;
+    }
+  } else {
+    responseBuffer_ += packet;
   }
 
   FeedData::Payload payload;
   if (!FeedData::parsePayloadJson(responseBuffer_, &payload)) {
+    if (packet.startsWith(kFeedChunkPrefix)) {
+      Serial.printf("[BLE] Chunked payload parse failed after %u bytes.\n",
+                    static_cast<unsigned>(responseBuffer_.length()));
+      resetResponseAssembly();
+    }
     return;
   }
 
+  Serial.printf("[BLE] Feed payload parsed: %u bytes.\n", static_cast<unsigned>(responseBuffer_.length()));
   pendingPayload_ = payload;
   hasPendingPayload_ = true;
 }

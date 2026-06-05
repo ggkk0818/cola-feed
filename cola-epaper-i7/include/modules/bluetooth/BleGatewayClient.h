@@ -42,6 +42,7 @@ class BleGatewayClient {
   bool scanForGateway();
   bool connectAndRequest();
   void disconnectClient();
+  void resetResponseAssembly();
 
   StatusSnapshot status_{};
   State state_ = State::kIdle;
@@ -51,6 +52,8 @@ class BleGatewayClient {
   BLERemoteCharacteristic* broadcastCharacteristic_ = nullptr;
   String gatewayAddress_;
   String responseBuffer_;
+  uint16_t expectedNextChunkIndex_ = 1;
+  uint16_t expectedTotalChunks_ = 0;
   FeedData::Payload pendingPayload_;
   bool hasPendingPayload_ = false;
   uint32_t nextRequestDueMs_ = 0;
