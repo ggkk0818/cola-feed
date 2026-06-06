@@ -67,12 +67,12 @@ class DisplayModule {
   const MainPageRegionState& getMainPageRegionState(MainPageRegion region) const;
 
   bool shouldRenderMainPageFullRefresh() const;
-  bool shouldRenderMainPageRegion(MainPageRegion region) const;
-  bool shouldRenderMainPageSidebarUpperRegion() const;
+  bool hasDirtyMainPageNonTopRegion() const;
+  bool shouldRefreshMainPageContent(const String& durationText, const String& timestampText,
+                                    bool showTimestamp) const;
 
   void renderMainPageFullRefresh();
   void renderMainPagePartialRefresh(MainPageRegion region);
-  void renderMainPageSidebarUpperPartialRefresh();
   void renderMainPageLayout();
   void renderMainPageRegion(MainPageRegion region);
   void renderBatteryStatusIcon(int16_t x, int16_t y, uint8_t batteryPercentage);

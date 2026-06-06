@@ -85,6 +85,71 @@ bool isDailyForecastDataEqual(const WeatherData::DailyForecastData& left,
          left.textDay == right.textDay;
 }
 
+bool tryParseUintValue(const String& text, uint32_t* value) {
+  if (value == nullptr) {
+    return false;
+  }
+
+  String normalized = text;
+  normalized.trim();
+  if (normalized.isEmpty()) {
+    return false;
+  }
+
+  uint32_t parsedValue = 0;
+  for (size_t index = 0; index < normalized.length(); ++index) {
+    const char ch = normalized[index];
+    if (ch < '0' || ch > '9') {
+      return false;
+    }
+
+    parsedValue = (parsedValue * 10UL) + static_cast<uint32_t>(ch - '0');
+  }
+
+  *value = parsedValue;
+  return true;
+}
+
+bool tryParseElapsedDurationMinutes(const String& durationText, uint32_t* totalMinutes) {
+  if (totalMinutes == nullptr) {
+    return false;
+  }
+
+  String normalized = durationText;
+  normalized.trim();
+  if (normalized.isEmpty() || normalized == "--") {
+    return false;
+  }
+
+  const int minuteMarkerIndex = normalized.lastIndexOf('M');
+  if (minuteMarkerIndex <= 0) {
+    return false;
+  }
+
+  const int hourMarkerIndex = normalized.indexOf('H');
+  uint32_t hours = 0;
+  uint32_t minutes = 0;
+
+  if (hourMarkerIndex >= 0) {
+    if (!tryParseUintValue(normalized.substring(0, hourMarkerIndex), &hours) ||
+        !tryParseUintValue(normalized.substring(hourMarkerIndex + 1, minuteMarkerIndex),
+                           &minutes)) {
+      return false;
+    }
+  } else if (!tryParseUintValue(normalized.substring(0, minuteMarkerIndex), &minutes)) {
+    return false;
+  }
+
+  *totalMinutes = (hours * 60UL) + minutes;
+  return true;
+}
+
+bool isElapsedDurationRefreshBoundary(const String& durationText) {
+  uint32_t totalMinutes = 0;
+  return tryParseElapsedDurationMinutes(durationText, &totalMinutes) && totalMinutes > 0 &&
+         (totalMinutes % 5UL) == 0;
+}
+
 bool resolveWeatherIconAsset(uint16_t iconCode, BitmapAsset& asset) {
   switch (iconCode) {
     case 100:
@@ -238,48 +303,14 @@ void DisplayModule::renderMainPage() {
     return;
   }
 
-  bool renderedAnyRegion = false;
-
-  const MainPageRegion standaloneRegions[] = {
-      MainPageRegion::kTop,
-      MainPageRegion::kSidebarForecast,
-      MainPageRegion::kContent,
-  };
-
-  for (MainPageRegion region : standaloneRegions) {
-    if (shouldRenderMainPageRegion(region)) {
-      renderMainPagePartialRefresh(region);
-      updateMainPageRegionStateAfterRefresh(region, false);
-      renderedAnyRegion = true;
-    }
+  if (!mainPageTopState_.dirty) {
+    return;
   }
 
-  if (shouldRenderMainPageSidebarUpperRegion()) {
-    renderMainPageSidebarUpperPartialRefresh();
-    updateMainPageRegionStateAfterRefresh(MainPageRegion::kSidebarOutdoor, false);
-    updateMainPageRegionStateAfterRefresh(MainPageRegion::kSidebarIndoor, false);
-    renderedAnyRegion = true;
-  } else {
-    const MainPageRegion upperRegions[] = {
-        MainPageRegion::kSidebarOutdoor,
-        MainPageRegion::kSidebarIndoor,
-    };
-
-    for (MainPageRegion region : upperRegions) {
-      if (!shouldRenderMainPageRegion(region)) {
-        continue;
-      }
-
-      renderMainPagePartialRefresh(region);
-      updateMainPageRegionStateAfterRefresh(region, false);
-      renderedAnyRegion = true;
-    }
-  }
-
-  if (renderedAnyRegion) {
-    hasRenderedMainPage_ = true;
-    hibernate();
-  }
+  renderMainPagePartialRefresh(MainPageRegion::kTop);
+  updateMainPageRegionStateAfterRefresh(MainPageRegion::kTop, false);
+  hasRenderedMainPage_ = true;
+  hibernate();
 }
 
 DisplayModule::MainPageRegionBounds DisplayModule::getMainPageTopBounds() const {
@@ -383,36 +414,17 @@ bool DisplayModule::shouldRenderMainPageFullRefresh() const {
     return true;
   }
 
-  const MainPageRegion regions[] = {
-      MainPageRegion::kTop,
-    MainPageRegion::kSidebarOutdoor,
-    MainPageRegion::kSidebarIndoor,
-    MainPageRegion::kSidebarForecast,
-      MainPageRegion::kContent,
-  };
-
-  for (MainPageRegion region : regions) {
-    const MainPageRegionState& state = getMainPageRegionState(region);
-    if (!state.dirty) {
-      continue;
-    }
-
-    if (state.consecutivePartialRefreshes >= kMainPageMaxConsecutivePartialRefreshes ||
-        state.containsRed || state.willDrawRed) {
-      return true;
-    }
+  if (hasDirtyMainPageNonTopRegion()) {
+    return true;
   }
 
-  return false;
-}
+  const MainPageRegionState& topState = getMainPageRegionState(MainPageRegion::kTop);
+  if (!topState.dirty) {
+    return false;
+  }
 
-bool DisplayModule::shouldRenderMainPageRegion(MainPageRegion region) const {
-  return getMainPageRegionState(region).dirty;
-}
-
-bool DisplayModule::shouldRenderMainPageSidebarUpperRegion() const {
-  return shouldRenderMainPageRegion(MainPageRegion::kSidebarOutdoor) &&
-         shouldRenderMainPageRegion(MainPageRegion::kSidebarIndoor);
+  return topState.consecutivePartialRefreshes >= kMainPageMaxConsecutivePartialRefreshes ||
+         topState.containsRed || topState.willDrawRed;
 }
 
 void DisplayModule::renderMainPageFullRefresh() {
@@ -439,16 +451,41 @@ void DisplayModule::renderMainPagePartialRefresh(MainPageRegion region) {
   } while (display_.nextPage());
 }
 
-void DisplayModule::renderMainPageSidebarUpperPartialRefresh() {
-  const MainPageRegionBounds bounds = getMainPageSidebarUpperBounds();
+bool DisplayModule::hasDirtyMainPageNonTopRegion() const {
+  const MainPageRegion regions[] = {
+      MainPageRegion::kSidebarOutdoor,
+      MainPageRegion::kSidebarIndoor,
+      MainPageRegion::kSidebarForecast,
+      MainPageRegion::kContent,
+  };
 
-  display_.setPartialWindow(bounds.x, bounds.y, bounds.width, bounds.height);
-  display_.firstPage();
-  do {
-    renderMainPageSidebarOutdoorRegion(getMainPageSidebarOutdoorBounds());
-    renderMainPageSidebarIndoorRegion(getMainPageSidebarIndoorBounds());
-    renderMainPageLayout();
-  } while (display_.nextPage());
+  for (MainPageRegion region : regions) {
+    if (getMainPageRegionState(region).dirty) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool DisplayModule::shouldRefreshMainPageContent(const String& durationText,
+                                                 const String& timestampText,
+                                                 bool showTimestamp) const {
+  const bool timestampChanged = mainPageContentTimestamp_ != timestampText;
+  const bool visibilityChanged = mainPageContentTimestampVisible_ != showTimestamp;
+  if (timestampChanged || visibilityChanged) {
+    return true;
+  }
+
+  if (mainPageContentDuration_ == durationText) {
+    return false;
+  }
+
+  if (!showTimestamp || timestampText.isEmpty()) {
+    return false;
+  }
+
+  return isElapsedDurationRefreshBoundary(durationText);
 }
 
 void DisplayModule::renderMainPageLayout() {
@@ -521,6 +558,10 @@ void DisplayModule::setMainPageSidebarWeatherData(const WeatherData::SidebarWeat
 
   sidebarWeatherData_ = data;
 
+  if (mainPageContentTimestampVisible_) {
+    return;
+  }
+
   if (outdoorChanged) {
     markMainPageRegionDirty(MainPageRegion::kSidebarOutdoor);
   }
@@ -541,6 +582,11 @@ void DisplayModule::setMainPageOutdoorEnvironmentData(
   }
 
   sidebarWeatherData_.outdoor = data;
+
+  if (mainPageContentTimestampVisible_) {
+    return;
+  }
+
   markMainPageRegionDirty(MainPageRegion::kSidebarOutdoor);
 }
 
@@ -551,6 +597,11 @@ void DisplayModule::setMainPageIndoorEnvironmentData(
   }
 
   sidebarWeatherData_.indoor = data;
+
+  if (mainPageContentTimestampVisible_) {
+    return;
+  }
+
   markMainPageRegionDirty(MainPageRegion::kSidebarIndoor);
 }
 
@@ -570,6 +621,10 @@ void DisplayModule::setMainPageForecastData(const WeatherData::DailyForecastData
     }
   }
 
+  if (mainPageContentTimestampVisible_) {
+    return;
+  }
+
   if (forecastChanged) {
     markMainPageRegionDirty(MainPageRegion::kSidebarForecast);
   }
@@ -582,10 +637,16 @@ void DisplayModule::setMainPageContentData(const String& durationText, const Str
     return;
   }
 
+  const bool shouldRefresh =
+      shouldRefreshMainPageContent(durationText, timestampText, showTimestamp);
+
   mainPageContentDuration_ = durationText;
   mainPageContentTimestamp_ = timestampText;
   mainPageContentTimestampVisible_ = showTimestamp;
-  markMainPageRegionDirty(MainPageRegion::kContent);
+
+  if (shouldRefresh) {
+    markMainPageRegionDirty(MainPageRegion::kContent);
+  }
 }
 
 void DisplayModule::renderBatteryStatusIcon(int16_t x, int16_t y, uint8_t batteryPercentage) {
