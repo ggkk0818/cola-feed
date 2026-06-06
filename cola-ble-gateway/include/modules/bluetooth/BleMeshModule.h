@@ -46,6 +46,14 @@ class BleMeshModule {
     bool pending = false;
   };
 
+  struct PendingFeedTransfer {
+    String payload;
+    size_t totalChunks = 0;
+    size_t nextChunkIndex = 0;
+    uint32_t lastChunkSentAtMs = 0;
+    bool active = false;
+  };
+
   void startMesh();
   void stopMesh();
 
@@ -68,4 +76,5 @@ class BleMeshModule {
 
   FeedSyncCache feedCache_;
   PendingBroadcastRequest pendingBroadcastRequest_;
+  PendingFeedTransfer pendingFeedTransfer_;
 };

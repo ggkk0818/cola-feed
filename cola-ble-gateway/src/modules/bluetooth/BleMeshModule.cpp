@@ -15,7 +15,8 @@ constexpr const char* kFeedServiceUuid = "4e6a1000-5c4f-45af-8f1f-c41c01ab1000";
 constexpr const char* kFeedDataCharacteristicUuid = "4e6a1001-5c4f-45af-8f1f-c41c01ab1001";
 constexpr const char* kBroadcastCharacteristicUuid = "4e6a1002-5c4f-45af-8f1f-c41c01ab1002";
 constexpr const char* kFeedChunkPrefix = "CF1|";
-constexpr size_t kFeedChunkPayloadBytes = 480U;
+constexpr size_t kFeedChunkPayloadBytes = 160U;
+constexpr uint32_t kFeedChunkSendIntervalMs = 15U;
 
 struct DateTimeParts {
   int year = 0;
@@ -128,37 +129,6 @@ String buildCurrentServerTime(const String& sourceServerTime, uint32_t receivedA
   return formatDateTime(dateTime);
 }
 
-bool notifyFeedPayloadInChunks(BLECharacteristic* characteristic, const String& payload) {
-  if (characteristic == nullptr) {
-    return false;
-  }
-
-  const size_t payloadLength = static_cast<size_t>(payload.length());
-  const size_t totalChunks = payloadLength == 0U ? 1U : ((payloadLength + kFeedChunkPayloadBytes - 1U) / kFeedChunkPayloadBytes);
-
-  Serial.printf("[BLE] Notify feed payload: length=%u, chunkPayload=%u, chunks=%u\n",
-                static_cast<unsigned>(payloadLength),
-                static_cast<unsigned>(kFeedChunkPayloadBytes),
-                static_cast<unsigned>(totalChunks));
-
-  for (size_t chunkIndex = 0; chunkIndex < totalChunks; ++chunkIndex) {
-    const size_t offset = chunkIndex * kFeedChunkPayloadBytes;
-    const size_t remainingBytes = payloadLength > offset ? (payloadLength - offset) : 0U;
-    const size_t chunkLength = remainingBytes > kFeedChunkPayloadBytes ? kFeedChunkPayloadBytes : remainingBytes;
-    String packet = String(kFeedChunkPrefix) + String(static_cast<unsigned>(chunkIndex + 1U)) + '|' +
-                    String(static_cast<unsigned>(totalChunks)) + '|';
-    if (chunkLength > 0U) {
-      packet += payload.substring(offset, offset + chunkLength);
-    }
-
-    characteristic->setValue(packet.c_str());
-    characteristic->notify();
-  }
-
-  Serial.println("[BLE] Feed payload notified in chunks.");
-  return true;
-}
-
 class BleServerCallbacks : public BLEServerCallbacks {
  public:
   explicit BleServerCallbacks(BleMeshModule* owner) : owner_(owner) {}
@@ -210,6 +180,37 @@ void BleMeshModule::loop() {
   }
 
   processPendingBroadcast();
+
+  if (pendingFeedTransfer_.active && feedDataCharacteristic_ != nullptr) {
+    const uint32_t nowMs = millis();
+    if (pendingFeedTransfer_.nextChunkIndex == 0 ||
+        (nowMs - pendingFeedTransfer_.lastChunkSentAtMs) >= kFeedChunkSendIntervalMs) {
+      const size_t chunkNumber = pendingFeedTransfer_.nextChunkIndex + 1U;
+      const size_t offset = pendingFeedTransfer_.nextChunkIndex * kFeedChunkPayloadBytes;
+      const size_t payloadLength = static_cast<size_t>(pendingFeedTransfer_.payload.length());
+      const size_t remainingBytes = payloadLength > offset ? (payloadLength - offset) : 0U;
+      const size_t chunkLength = remainingBytes > kFeedChunkPayloadBytes ? kFeedChunkPayloadBytes : remainingBytes;
+      String packet = String(kFeedChunkPrefix) + String(static_cast<unsigned>(chunkNumber)) + '|' +
+                      String(static_cast<unsigned>(pendingFeedTransfer_.totalChunks)) + '|';
+      if (chunkLength > 0U) {
+        packet += pendingFeedTransfer_.payload.substring(offset, offset + chunkLength);
+      }
+
+        feedDataCharacteristic_->setValue(packet.c_str());
+      feedDataCharacteristic_->notify();
+      pendingFeedTransfer_.lastChunkSentAtMs = nowMs;
+      ++pendingFeedTransfer_.nextChunkIndex;
+
+      if (pendingFeedTransfer_.nextChunkIndex >= pendingFeedTransfer_.totalChunks) {
+        Serial.println("[BLE] Feed payload notified in chunks.");
+        pendingFeedTransfer_.payload = String();
+        pendingFeedTransfer_.totalChunks = 0;
+        pendingFeedTransfer_.nextChunkIndex = 0;
+        pendingFeedTransfer_.lastChunkSentAtMs = 0;
+        pendingFeedTransfer_.active = false;
+      }
+    }
+  }
 
   if (!restartAdvertisingPending_ || bleServer_ == nullptr) {
     return;
@@ -290,6 +291,14 @@ void BleMeshModule::stopMesh() {
   meshRunning_ = false;
   restartAdvertisingPending_ = false;
   clientCount_ = 0;
+  pendingBroadcastRequest_.pending = false;
+  pendingBroadcastRequest_.length = 0;
+  pendingBroadcastRequest_.payload[0] = '\0';
+  pendingFeedTransfer_.payload = String();
+  pendingFeedTransfer_.totalChunks = 0;
+  pendingFeedTransfer_.nextChunkIndex = 0;
+  pendingFeedTransfer_.lastChunkSentAtMs = 0;
+  pendingFeedTransfer_.active = false;
 }
 
 void BleMeshModule::refreshFeedCache() {
@@ -368,9 +377,18 @@ void BleMeshModule::processPendingBroadcast() {
   }
 
   const String feedPayload = buildFeedPayloadJson();
-  if (!notifyFeedPayloadInChunks(feedDataCharacteristic_, feedPayload)) {
-    Serial.println("[BLE] Feed payload notify failed: feed characteristic unavailable.");
-  }
+  pendingFeedTransfer_.payload = feedPayload;
+  pendingFeedTransfer_.totalChunks = feedPayload.isEmpty()
+                                         ? 1U
+                                         : ((static_cast<size_t>(feedPayload.length()) + kFeedChunkPayloadBytes - 1U) /
+                                            kFeedChunkPayloadBytes);
+  pendingFeedTransfer_.nextChunkIndex = 0;
+  pendingFeedTransfer_.lastChunkSentAtMs = 0;
+  pendingFeedTransfer_.active = true;
+  Serial.printf("[BLE] Notify feed payload: length=%u, chunkPayload=%u, chunks=%u\n",
+                static_cast<unsigned>(feedPayload.length()),
+                static_cast<unsigned>(kFeedChunkPayloadBytes),
+                static_cast<unsigned>(pendingFeedTransfer_.totalChunks));
 }
 
 void BleMeshModule::onClientConnected() {
@@ -408,6 +426,11 @@ void BleMeshModule::onClientBroadcast(const String& payload) {
 
   if (pendingBroadcastRequest_.pending) {
     Serial.println("[BLE] Broadcast ignored: previous request still pending.");
+    return;
+  }
+
+  if (pendingFeedTransfer_.active) {
+    Serial.println("[BLE] Broadcast ignored: feed transfer already in progress.");
     return;
   }
 
