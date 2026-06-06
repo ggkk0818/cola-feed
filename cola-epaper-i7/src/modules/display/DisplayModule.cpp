@@ -442,13 +442,20 @@ void DisplayModule::renderMainPageFullRefresh() {
 
 void DisplayModule::renderMainPagePartialRefresh(MainPageRegion region) {
   const MainPageRegionBounds bounds = getMainPageRegionBounds(region);
-
+  // ================= 第一步：主动擦除旧区域 =================
+  display_.setPartialWindow(bounds.x, bounds.y, bounds.width, bounds.height);
+  display_.firstPage();
+  do {
+      // 填充纯白背景，覆盖旧内容
+      display_.fillRect(bounds.x, bounds.y, bounds.width, bounds.height, GxEPD_WHITE);
+  } while (display_.nextPageBW()); // 使用 nextPageBW 发送白屏差异
+  // ================= 第二步：绘制新时间 =================
   display_.setPartialWindow(bounds.x, bounds.y, bounds.width, bounds.height);
   display_.firstPage();
   do {
     renderMainPageRegion(region);
     renderMainPageLayout();
-  } while (display_.nextPage());
+  } while (display_.nextPageBW());
 }
 
 bool DisplayModule::hasDirtyMainPageNonTopRegion() const {
