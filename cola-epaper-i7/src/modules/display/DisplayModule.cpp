@@ -15,6 +15,62 @@
 #include "modules/display/weather-icons/102.h"
 #include "modules/display/weather-icons/103.h"
 #include "modules/display/weather-icons/104.h"
+#include "modules/display/weather-icons/150.h"
+#include "modules/display/weather-icons/151.h"
+#include "modules/display/weather-icons/152.h"
+#include "modules/display/weather-icons/153.h"
+#include "modules/display/weather-icons/300.h"
+#include "modules/display/weather-icons/301.h"
+#include "modules/display/weather-icons/302.h"
+#include "modules/display/weather-icons/303.h"
+#include "modules/display/weather-icons/304.h"
+#include "modules/display/weather-icons/305.h"
+#include "modules/display/weather-icons/306.h"
+#include "modules/display/weather-icons/307.h"
+#include "modules/display/weather-icons/308.h"
+#include "modules/display/weather-icons/309.h"
+#include "modules/display/weather-icons/310.h"
+#include "modules/display/weather-icons/311.h"
+#include "modules/display/weather-icons/312.h"
+#include "modules/display/weather-icons/313.h"
+#include "modules/display/weather-icons/314.h"
+#include "modules/display/weather-icons/315.h"
+#include "modules/display/weather-icons/316.h"
+#include "modules/display/weather-icons/317.h"
+#include "modules/display/weather-icons/318.h"
+#include "modules/display/weather-icons/350.h"
+#include "modules/display/weather-icons/351.h"
+#include "modules/display/weather-icons/399.h"
+#include "modules/display/weather-icons/400.h"
+#include "modules/display/weather-icons/401.h"
+#include "modules/display/weather-icons/402.h"
+#include "modules/display/weather-icons/403.h"
+#include "modules/display/weather-icons/404.h"
+#include "modules/display/weather-icons/405.h"
+#include "modules/display/weather-icons/406.h"
+#include "modules/display/weather-icons/407.h"
+#include "modules/display/weather-icons/408.h"
+#include "modules/display/weather-icons/409.h"
+#include "modules/display/weather-icons/410.h"
+#include "modules/display/weather-icons/456.h"
+#include "modules/display/weather-icons/457.h"
+#include "modules/display/weather-icons/499.h"
+#include "modules/display/weather-icons/500.h"
+#include "modules/display/weather-icons/501.h"
+#include "modules/display/weather-icons/502.h"
+#include "modules/display/weather-icons/503.h"
+#include "modules/display/weather-icons/504.h"
+#include "modules/display/weather-icons/507.h"
+#include "modules/display/weather-icons/508.h"
+#include "modules/display/weather-icons/509.h"
+#include "modules/display/weather-icons/510.h"
+#include "modules/display/weather-icons/511.h"
+#include "modules/display/weather-icons/512.h"
+#include "modules/display/weather-icons/513.h"
+#include "modules/display/weather-icons/514.h"
+#include "modules/display/weather-icons/515.h"
+#include "modules/display/weather-icons/900.h"
+#include "modules/display/weather-icons/901.h"
 #include "modules/display/weather-icons/999.h"
 
 namespace {
@@ -151,31 +207,83 @@ bool isElapsedDurationRefreshBoundary(const String& durationText) {
          (totalMinutes % 5UL) == 0;
 }
 
+#define WEATHER_ICON_CASE(code)                                                             \
+  case code:                                                                               \
+    asset = BitmapAsset{WeatherIcon##code::kBitmap, WeatherIcon##code::kWidth,            \
+                        WeatherIcon##code::kHeight};                                       \
+    return true;
+
 bool resolveWeatherIconAsset(uint16_t iconCode, BitmapAsset& asset) {
   switch (iconCode) {
-    case 100:
-      asset = BitmapAsset{WeatherIcon100::kBitmap, WeatherIcon100::kWidth, WeatherIcon100::kHeight};
-      return true;
-    case 101:
-      asset = BitmapAsset{WeatherIcon101::kBitmap, WeatherIcon101::kWidth, WeatherIcon101::kHeight};
-      return true;
-    case 102:
-      asset = BitmapAsset{WeatherIcon102::kBitmap, WeatherIcon102::kWidth, WeatherIcon102::kHeight};
-      return true;
-    case 103:
-      asset = BitmapAsset{WeatherIcon103::kBitmap, WeatherIcon103::kWidth, WeatherIcon103::kHeight};
-      return true;
-    case 104:
-      asset = BitmapAsset{WeatherIcon104::kBitmap, WeatherIcon104::kWidth, WeatherIcon104::kHeight};
-      return true;
-    case 999:
-      asset = BitmapAsset{WeatherIcon999::kBitmap, WeatherIcon999::kWidth, WeatherIcon999::kHeight};
-      return true;
+    WEATHER_ICON_CASE(100)
+    WEATHER_ICON_CASE(101)
+    WEATHER_ICON_CASE(102)
+    WEATHER_ICON_CASE(103)
+    WEATHER_ICON_CASE(104)
+    WEATHER_ICON_CASE(150)
+    WEATHER_ICON_CASE(151)
+    WEATHER_ICON_CASE(152)
+    WEATHER_ICON_CASE(153)
+    WEATHER_ICON_CASE(300)
+    WEATHER_ICON_CASE(301)
+    WEATHER_ICON_CASE(302)
+    WEATHER_ICON_CASE(303)
+    WEATHER_ICON_CASE(304)
+    WEATHER_ICON_CASE(305)
+    WEATHER_ICON_CASE(306)
+    WEATHER_ICON_CASE(307)
+    WEATHER_ICON_CASE(308)
+    WEATHER_ICON_CASE(309)
+    WEATHER_ICON_CASE(310)
+    WEATHER_ICON_CASE(311)
+    WEATHER_ICON_CASE(312)
+    WEATHER_ICON_CASE(313)
+    WEATHER_ICON_CASE(314)
+    WEATHER_ICON_CASE(315)
+    WEATHER_ICON_CASE(316)
+    WEATHER_ICON_CASE(317)
+    WEATHER_ICON_CASE(318)
+    WEATHER_ICON_CASE(350)
+    WEATHER_ICON_CASE(351)
+    WEATHER_ICON_CASE(399)
+    WEATHER_ICON_CASE(400)
+    WEATHER_ICON_CASE(401)
+    WEATHER_ICON_CASE(402)
+    WEATHER_ICON_CASE(403)
+    WEATHER_ICON_CASE(404)
+    WEATHER_ICON_CASE(405)
+    WEATHER_ICON_CASE(406)
+    WEATHER_ICON_CASE(407)
+    WEATHER_ICON_CASE(408)
+    WEATHER_ICON_CASE(409)
+    WEATHER_ICON_CASE(410)
+    WEATHER_ICON_CASE(456)
+    WEATHER_ICON_CASE(457)
+    WEATHER_ICON_CASE(499)
+    WEATHER_ICON_CASE(500)
+    WEATHER_ICON_CASE(501)
+    WEATHER_ICON_CASE(502)
+    WEATHER_ICON_CASE(503)
+    WEATHER_ICON_CASE(504)
+    WEATHER_ICON_CASE(507)
+    WEATHER_ICON_CASE(508)
+    WEATHER_ICON_CASE(509)
+    WEATHER_ICON_CASE(510)
+    WEATHER_ICON_CASE(511)
+    WEATHER_ICON_CASE(512)
+    WEATHER_ICON_CASE(513)
+    WEATHER_ICON_CASE(514)
+    WEATHER_ICON_CASE(515)
+    WEATHER_ICON_CASE(900)
+    WEATHER_ICON_CASE(901)
+    WEATHER_ICON_CASE(999)
     default:
       asset = BitmapAsset{WeatherIcon999::kBitmap, WeatherIcon999::kWidth, WeatherIcon999::kHeight};
       return false;
   }
 }
+
+#undef WEATHER_ICON_CASE
 
 void drawWeatherIcon(DisplayDriver& display, int16_t x, int16_t y, uint16_t iconCode) {
   BitmapAsset asset{};
