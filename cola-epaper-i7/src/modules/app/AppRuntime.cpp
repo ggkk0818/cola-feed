@@ -364,6 +364,7 @@ void AppRuntime::idleDataTaskUntil(uint32_t nowMs, uint32_t nextWakeDueMs) {
   bool renderRequested = false;
   bool displayIdle = false;
   readSharedState(&renderRequested, &displayIdle);
+  const BleGatewayClient::StatusSnapshot& bleStatus = bleGatewayClient_.getStatus();
 
   if (renderRequested || !displayIdle) {
     delayCurrentTask(1);
@@ -376,8 +377,15 @@ void AppRuntime::idleDataTaskUntil(uint32_t nowMs, uint32_t nextWakeDueMs) {
   }
 
   const uint32_t remainingMs = nextWakeDueMs - nowMs;
-  if (bleGatewayClient_.getStatus().requestInFlight) {
+  if (bleStatus.requestInFlight) {
     delayCurrentTask(remainingMs < kBusyRequestPollMs ? remainingMs : kBusyRequestPollMs);
+    return;
+  }
+
+  // BLE is initialized only for an active request cycle. Keep the data task awake
+  // with RTOS delays until that cycle deinitializes the stack again.
+  if (bleStatus.initialized) {
+    delayCurrentTask(remainingMs);
     return;
   }
 

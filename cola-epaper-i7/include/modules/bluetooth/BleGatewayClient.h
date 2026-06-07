@@ -11,6 +11,7 @@ class BLERemoteCharacteristic;
 class BleGatewayClient {
  public:
   struct StatusSnapshot {
+    // True only while the BLE stack is active for the current request cycle.
     bool initialized = false;
     bool requestInFlight = false;
     bool timedOut = false;
@@ -40,11 +41,14 @@ class BleGatewayClient {
   void beginRequest();
   void completeRequestSuccess(const FeedData::Payload& payload);
   void completeRequestTimeout();
+  bool initializeBleStack();
+  void deinitializeBleStack();
   bool scanForGateway();
   bool connectAndRequest();
   void disconnectClient();
   void resetResponseAssembly();
 
+  bool moduleReady_ = false;
   StatusSnapshot status_{};
   State state_ = State::kIdle;
   BLEScan* scan_ = nullptr;

@@ -100,23 +100,14 @@ bool parseChunkPacket(const String& packet, uint16_t* chunkIndex, uint16_t* tota
 BleGatewayClient::BleGatewayClient() = default;
 
 bool BleGatewayClient::begin() {
-  BLEDevice::init("");
-  scan_ = BLEDevice::getScan();
-  if (scan_ == nullptr) {
-    return false;
-  }
-
-  scan_->setActiveScan(true);
-  scan_->setInterval(1349);
-  scan_->setWindow(449);
-
-  status_.initialized = true;
+  moduleReady_ = true;
+  status_.initialized = false;
   nextRequestDueMs_ = 0;
   return true;
 }
 
 void BleGatewayClient::update() {
-  if (!status_.initialized) {
+  if (!moduleReady_) {
     return;
   }
 
@@ -171,7 +162,7 @@ void BleGatewayClient::update() {
 const BleGatewayClient::StatusSnapshot& BleGatewayClient::getStatus() const { return status_; }
 
 uint32_t BleGatewayClient::getNextWorkDueMs(uint32_t nowMs) const {
-  if (!status_.initialized) {
+  if (!moduleReady_) {
     return nowMs;
   }
 
@@ -219,6 +210,12 @@ void BleGatewayClient::beginRequest() {
   hasPendingPayload_ = false;
   lastScanAttemptMs_ = 0;
   disconnectClient();
+
+  if (!initializeBleStack()) {
+    completeRequestTimeout();
+    return;
+  }
+
   state_ = State::kScanning;
 }
 
@@ -231,7 +228,7 @@ void BleGatewayClient::completeRequestSuccess(const FeedData::Payload& payload) 
   status_.requestStartedMs = 0;
   hasPendingPayload_ = false;
   nextRequestDueMs_ = millis() + kFeedPollIntervalMs;
-  disconnectClient();
+  deinitializeBleStack();
   state_ = State::kIdle;
 }
 
@@ -243,8 +240,40 @@ void BleGatewayClient::completeRequestTimeout() {
   resetResponseAssembly();
   hasPendingPayload_ = false;
   nextRequestDueMs_ = millis() + kFeedPollIntervalMs;
-  disconnectClient();
+  deinitializeBleStack();
   state_ = State::kIdle;
+}
+
+bool BleGatewayClient::initializeBleStack() {
+  if (status_.initialized) {
+    return scan_ != nullptr;
+  }
+
+  BLEDevice::init("");
+  scan_ = BLEDevice::getScan();
+  if (scan_ == nullptr) {
+    BLEDevice::deinit(false);
+    status_.initialized = false;
+    return false;
+  }
+
+  scan_->setActiveScan(true);
+  scan_->setInterval(1349);
+  scan_->setWindow(449);
+  status_.initialized = true;
+  return true;
+}
+
+void BleGatewayClient::deinitializeBleStack() {
+  disconnectClient();
+  scan_ = nullptr;
+
+  if (!status_.initialized) {
+    return;
+  }
+
+  BLEDevice::deinit(false);
+  status_.initialized = false;
 }
 
 bool BleGatewayClient::scanForGateway() {
@@ -338,8 +367,6 @@ void BleGatewayClient::disconnectClient() {
     if (client_->isConnected()) {
       client_->disconnect();
     }
-
-    delete client_;
     client_ = nullptr;
   }
 }
