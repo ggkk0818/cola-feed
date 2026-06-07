@@ -54,7 +54,13 @@ class DisplayModule {
     bool willDrawRed;
   };
 
+  struct MainPageTopPartialState {
+    bool timeDirty;
+    bool batteryDirty;
+  };
+
   MainPageRegionBounds getMainPageTopBounds() const;
+  MainPageRegionBounds getMainPageTopContentBounds() const;
   MainPageRegionBounds getMainPageSidebarBounds() const;
   MainPageRegionBounds getMainPageSidebarUpperBounds() const;
   MainPageRegionBounds getMainPageSidebarOutdoorBounds() const;
@@ -62,6 +68,12 @@ class DisplayModule {
   MainPageRegionBounds getMainPageSidebarForecastBounds() const;
   MainPageRegionBounds getMainPageContentBounds() const;
   MainPageRegionBounds getMainPageRegionBounds(MainPageRegion region) const;
+  MainPageRegionBounds mergeMainPageRegionBounds(const MainPageRegionBounds& first,
+                                                 const MainPageRegionBounds& second) const;
+  MainPageRegionBounds getCurrentMainPageTopTimeBounds() const;
+  MainPageRegionBounds getCurrentMainPageTopBatteryStatusBounds() const;
+  MainPageRegionBounds getMainPageTopTimeRefreshBounds() const;
+  MainPageRegionBounds getMainPageTopBatteryRefreshBounds() const;
 
   MainPageRegionState& getMainPageRegionState(MainPageRegion region);
   const MainPageRegionState& getMainPageRegionState(MainPageRegion region) const;
@@ -73,9 +85,14 @@ class DisplayModule {
 
   void renderMainPageFullRefresh();
   void renderMainPagePartialRefresh(MainPageRegion region);
+  void clearMainPagePartialWindow(const MainPageRegionBounds& bounds);
+  void renderMainPageTopPartialWindow(const MainPageRegionBounds& bounds, bool renderTime,
+                                      bool renderBatteryStatus);
   void renderMainPageLayout();
   void renderMainPageRegion(MainPageRegion region);
   void renderBatteryStatusIcon(int16_t x, int16_t y, uint8_t batteryPercentage);
+  void renderMainPageTopTime();
+  void renderMainPageTopBatteryStatus();
   void renderMainPageTopRegion(const MainPageRegionBounds& bounds);
   void renderMainPageSidebarRegion(const MainPageRegionBounds& bounds);
   void renderMainPageSidebarOutdoorRegion(const MainPageRegionBounds& bounds);
@@ -83,6 +100,8 @@ class DisplayModule {
   void renderMainPageSidebarForecastRegion(const MainPageRegionBounds& bounds);
   void renderMainPageContentRegion(const MainPageRegionBounds& bounds);
   void markAllMainPageRegionsDirty();
+  void markMainPageTopTimeDirty();
+  void markMainPageTopBatteryDirty();
   void updateMainPageRegionStateAfterRefresh(MainPageRegion region, bool fullRefresh);
   void resetMainPageRegionStateAfterFullRefresh();
   void markMainPageRegionDirty(MainPageRegion region, bool willDrawRed = false);
@@ -93,6 +112,9 @@ class DisplayModule {
   MainPageRegionState mainPageSidebarIndoorState_{0, true, false, false};
   MainPageRegionState mainPageSidebarForecastState_{0, true, false, false};
   MainPageRegionState mainPageContentState_{0, true, false, false};
+  MainPageTopPartialState mainPageTopPartialState_{true, true};
+  MainPageRegionBounds mainPageTopTimeRenderedBounds_{0, 0, 0, 0};
+  MainPageRegionBounds mainPageTopBatteryRenderedBounds_{0, 0, 0, 0};
   uint8_t mainPageBatteryPercentage_ = 70;
   bool mainPageCharging_ = true;
   bool mainPagePowerConnected_ = true;

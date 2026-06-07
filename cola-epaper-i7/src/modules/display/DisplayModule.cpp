@@ -35,6 +35,7 @@ constexpr int16_t kMainPageSidebarPadding = 5;
 constexpr int16_t kMainPageSidebarDashLength = 4;
 constexpr int16_t kMainPageSidebarDashGap = 4;
 constexpr int16_t kMainPageContentTextEdgeOffset = 12;
+constexpr int16_t kMainPageTopPartialPadding = 6;
 constexpr int16_t kBatteryStatusIconWidth = 44;
 constexpr int16_t kBatteryStatusIconHeight = 24;
 constexpr int16_t kBatteryStatusHeadWidth = 5;
@@ -318,6 +319,18 @@ DisplayModule::MainPageRegionBounds DisplayModule::getMainPageTopBounds() const 
                               kMainPageTopHeight};
 }
 
+DisplayModule::MainPageRegionBounds DisplayModule::getMainPageTopContentBounds() const {
+  const MainPageRegionBounds bounds = getMainPageTopBounds();
+  return MainPageRegionBounds{
+      bounds.x,
+      bounds.y,
+      bounds.width,
+      static_cast<int16_t>(bounds.height > kMainPageBorderThickness
+                               ? bounds.height - kMainPageBorderThickness
+                               : 0),
+  };
+}
+
 DisplayModule::MainPageRegionBounds DisplayModule::getMainPageSidebarBounds() const {
   return MainPageRegionBounds{0, kMainPageTopHeight, kMainPageSidebarWidth,
                               static_cast<int16_t>(display_.height() - kMainPageTopHeight)};
@@ -367,6 +380,109 @@ DisplayModule::MainPageRegionBounds DisplayModule::getMainPageRegionBounds(
   }
 
   return getMainPageContentBounds();
+}
+
+DisplayModule::MainPageRegionBounds DisplayModule::mergeMainPageRegionBounds(
+    const MainPageRegionBounds& first, const MainPageRegionBounds& second) const {
+  if (first.width <= 0 || first.height <= 0) {
+    return second;
+  }
+
+  if (second.width <= 0 || second.height <= 0) {
+    return first;
+  }
+
+  const int16_t left = first.x < second.x ? first.x : second.x;
+  const int16_t top = first.y < second.y ? first.y : second.y;
+  const int16_t firstRight = first.x + first.width;
+  const int16_t secondRight = second.x + second.width;
+  const int16_t right = firstRight > secondRight ? firstRight : secondRight;
+  const int16_t firstBottom = first.y + first.height;
+  const int16_t secondBottom = second.y + second.height;
+  const int16_t bottom = firstBottom > secondBottom ? firstBottom : secondBottom;
+
+  return MainPageRegionBounds{left, top, static_cast<int16_t>(right - left),
+                              static_cast<int16_t>(bottom - top)};
+}
+
+DisplayModule::MainPageRegionBounds DisplayModule::getCurrentMainPageTopTimeBounds() const {
+  const MainPageRegionBounds contentBounds = getMainPageTopContentBounds();
+  if (contentBounds.width <= 0 || contentBounds.height <= 0 || mainPageTopTime_.isEmpty()) {
+    return MainPageRegionBounds{contentBounds.x, contentBounds.y, 0, 0};
+  }
+
+  auto bitmapFonts = createFontCN96Renderer(const_cast<DisplayDriver&>(display_));
+  const int16_t textWidth = bitmapFonts.getUTF8Width(mainPageTopTime_.c_str());
+  const int16_t fontAscent = bitmapFonts.getFontAscent();
+  const int16_t fontDescent = bitmapFonts.getFontDescent();
+  const int16_t fontHeight = fontAscent - fontDescent;
+  if (textWidth <= 0 || fontHeight <= 0) {
+    return MainPageRegionBounds{contentBounds.x, contentBounds.y, 0, 0};
+  }
+
+  const int16_t timeAreaWidth =
+      contentBounds.width < kMainPageTopTimeAreaWidth ? contentBounds.width : kMainPageTopTimeAreaWidth;
+  const int16_t timeCenterX = contentBounds.x + (timeAreaWidth / 2);
+  const int16_t timeCenterY = contentBounds.y + (contentBounds.height / 2);
+  const int16_t textLeft = timeCenterX - (textWidth / 2);
+  const int16_t textTop = timeCenterY - (fontHeight / 2);
+  int16_t boundsLeft = textLeft - kMainPageTopPartialPadding;
+  int16_t boundsTop = textTop - kMainPageTopPartialPadding;
+  int16_t boundsRight = textLeft + textWidth + kMainPageTopPartialPadding;
+  int16_t boundsBottom = textTop + fontHeight + kMainPageTopPartialPadding;
+
+  if (boundsLeft < contentBounds.x) {
+    boundsLeft = contentBounds.x;
+  }
+
+  if (boundsTop < contentBounds.y) {
+    boundsTop = contentBounds.y;
+  }
+
+  const int16_t contentRight = contentBounds.x + contentBounds.width;
+  const int16_t contentBottom = contentBounds.y + contentBounds.height;
+  if (boundsRight > contentRight) {
+    boundsRight = contentRight;
+  }
+
+  if (boundsBottom > contentBottom) {
+    boundsBottom = contentBottom;
+  }
+
+  return MainPageRegionBounds{boundsLeft, boundsTop,
+                              static_cast<int16_t>(boundsRight - boundsLeft),
+                              static_cast<int16_t>(boundsBottom - boundsTop)};
+}
+
+DisplayModule::MainPageRegionBounds DisplayModule::getCurrentMainPageTopBatteryStatusBounds() const {
+  const MainPageRegionBounds topBounds = getMainPageTopBounds();
+  const int16_t batteryIconX = topBounds.x + topBounds.width - kBatteryStatusIconWidth -
+                               kBatteryStatusRightMargin;
+  const int16_t batteryIconY = topBounds.y + kBatteryStatusTopMargin;
+  int16_t boundsLeft = batteryIconX;
+
+  if (mainPageCharging_ && mainPagePowerConnected_) {
+    boundsLeft = batteryIconX - (kBatteryStatusAuxIconGap * 2) -
+                 (kBatteryStatusAuxIconSize * 2);
+  } else if (mainPageCharging_ || mainPagePowerConnected_) {
+    boundsLeft = batteryIconX - kBatteryStatusAuxIconGap - kBatteryStatusAuxIconSize;
+  }
+
+  return MainPageRegionBounds{
+      boundsLeft,
+      batteryIconY,
+      static_cast<int16_t>((batteryIconX + kBatteryStatusIconWidth) - boundsLeft),
+      kBatteryStatusAuxIconSize,
+  };
+}
+
+DisplayModule::MainPageRegionBounds DisplayModule::getMainPageTopTimeRefreshBounds() const {
+  return mergeMainPageRegionBounds(getCurrentMainPageTopTimeBounds(), mainPageTopTimeRenderedBounds_);
+}
+
+DisplayModule::MainPageRegionBounds DisplayModule::getMainPageTopBatteryRefreshBounds() const {
+  return mergeMainPageRegionBounds(getCurrentMainPageTopBatteryStatusBounds(),
+                                   mainPageTopBatteryRenderedBounds_);
 }
 
 DisplayModule::MainPageRegionState& DisplayModule::getMainPageRegionState(
@@ -441,20 +557,59 @@ void DisplayModule::renderMainPageFullRefresh() {
 }
 
 void DisplayModule::renderMainPagePartialRefresh(MainPageRegion region) {
+  if (region == MainPageRegion::kTop) {
+    if (mainPageTopPartialState_.timeDirty) {
+      const MainPageRegionBounds timeBounds = getMainPageTopTimeRefreshBounds();
+      if (timeBounds.width > 0 && timeBounds.height > 0) {
+        clearMainPagePartialWindow(timeBounds);
+        renderMainPageTopPartialWindow(timeBounds, true, false);
+      }
+      mainPageTopTimeRenderedBounds_ = getCurrentMainPageTopTimeBounds();
+    }
+
+    if (mainPageTopPartialState_.batteryDirty) {
+      const MainPageRegionBounds batteryBounds = getMainPageTopBatteryRefreshBounds();
+      if (batteryBounds.width > 0 && batteryBounds.height > 0) {
+        clearMainPagePartialWindow(batteryBounds);
+        renderMainPageTopPartialWindow(batteryBounds, false, true);
+      }
+      mainPageTopBatteryRenderedBounds_ = getCurrentMainPageTopBatteryStatusBounds();
+    }
+
+    return;
+  }
+
   const MainPageRegionBounds bounds = getMainPageRegionBounds(region);
-  // ================= 第一步：主动擦除旧区域 =================
-  display_.setPartialWindow(bounds.x, bounds.y, bounds.width, bounds.height);
-  display_.firstPage();
-  do {
-      // 填充纯白背景，覆盖旧内容
-      display_.fillRect(bounds.x, bounds.y, bounds.width, bounds.height, GxEPD_WHITE);
-  } while (display_.nextPageBW()); // 使用 nextPageBW 发送白屏差异
-  // ================= 第二步：绘制新时间 =================
+  clearMainPagePartialWindow(bounds);
   display_.setPartialWindow(bounds.x, bounds.y, bounds.width, bounds.height);
   display_.firstPage();
   do {
     renderMainPageRegion(region);
     renderMainPageLayout();
+  } while (display_.nextPageBW());
+}
+
+void DisplayModule::clearMainPagePartialWindow(const MainPageRegionBounds& bounds) {
+  display_.setPartialWindow(bounds.x, bounds.y, bounds.width, bounds.height);
+  display_.firstPage();
+  do {
+    display_.fillRect(bounds.x, bounds.y, bounds.width, bounds.height, GxEPD_WHITE);
+  } while (display_.nextPageBW());
+}
+
+void DisplayModule::renderMainPageTopPartialWindow(const MainPageRegionBounds& bounds,
+                                                   bool renderTime,
+                                                   bool renderBatteryStatus) {
+  display_.setPartialWindow(bounds.x, bounds.y, bounds.width, bounds.height);
+  display_.firstPage();
+  do {
+    if (renderTime) {
+      renderMainPageTopTime();
+    }
+
+    if (renderBatteryStatus) {
+      renderMainPageTopBatteryStatus();
+    }
   } while (display_.nextPageBW());
 }
 
@@ -539,7 +694,7 @@ void DisplayModule::setMainPageBatteryStatus(uint8_t batteryPercentage, bool isC
   mainPageBatteryPercentage_ = batteryPercentage;
   mainPageCharging_ = isCharging;
   mainPagePowerConnected_ = isPowerConnected;
-  markMainPageRegionDirty(MainPageRegion::kTop);
+  markMainPageTopBatteryDirty();
 }
 
 void DisplayModule::setMainPageTopTime(const String& topTimeText) {
@@ -548,7 +703,7 @@ void DisplayModule::setMainPageTopTime(const String& topTimeText) {
   }
 
   mainPageTopTime_ = topTimeText;
-  markMainPageRegionDirty(MainPageRegion::kTop);
+  markMainPageTopTimeDirty();
 }
 
 void DisplayModule::setMainPageSidebarWeatherData(const WeatherData::SidebarWeatherData& data) {
@@ -679,24 +834,24 @@ void DisplayModule::renderBatteryStatusIcon(int16_t x, int16_t y, uint8_t batter
   }
 }
 
-void DisplayModule::renderMainPageTopRegion(const MainPageRegionBounds& bounds) {
-  display_.fillRect(bounds.x, bounds.y, bounds.width, bounds.height, GxEPD_WHITE);
-
+void DisplayModule::renderMainPageTopTime() {
+  const MainPageRegionBounds contentBounds = getMainPageTopContentBounds();
   const int16_t timeAreaWidth =
-      bounds.width < kMainPageTopTimeAreaWidth ? bounds.width : kMainPageTopTimeAreaWidth;
-  const int16_t timeAreaHeight =
-      bounds.height > kMainPageBorderThickness ? bounds.height - kMainPageBorderThickness : 0;
-  const int16_t timeCenterX = bounds.x + (timeAreaWidth / 2);
-  const int16_t timeCenterY = bounds.y + (timeAreaHeight / 2);
+      contentBounds.width < kMainPageTopTimeAreaWidth ? contentBounds.width : kMainPageTopTimeAreaWidth;
+  const int16_t timeCenterX = contentBounds.x + (timeAreaWidth / 2);
+  const int16_t timeCenterY = contentBounds.y + (contentBounds.height / 2);
+  auto bitmapFonts = createFontCN96Renderer(display_);
+  drawCenterBitmapText(bitmapFonts, mainPageTopTime_, timeCenterX, timeCenterY);
+}
+
+void DisplayModule::renderMainPageTopBatteryStatus() {
+  const MainPageRegionBounds bounds = getMainPageTopBounds();
   const int16_t batteryIconX = bounds.x + bounds.width - kBatteryStatusIconWidth -
                                kBatteryStatusRightMargin;
   const int16_t batteryIconY = bounds.y + kBatteryStatusTopMargin;
   const int16_t auxIconY =
       batteryIconY + ((kBatteryStatusIconHeight - kBatteryStatusAuxIconSize) / 2);
   int16_t nextAuxIconX = batteryIconX - kBatteryStatusAuxIconGap - kBatteryStatusAuxIconSize;
-
-  auto bitmapFonts = createFontCN96Renderer(display_);
-  drawCenterBitmapText(bitmapFonts, mainPageTopTime_, timeCenterX, timeCenterY);
 
   if (mainPageCharging_) {
     display_.drawBitmap(nextAuxIconX, auxIconY, ChargingImage24x24::kBitmap,
@@ -711,6 +866,12 @@ void DisplayModule::renderMainPageTopRegion(const MainPageRegionBounds& bounds) 
   }
 
   renderBatteryStatusIcon(batteryIconX, batteryIconY, mainPageBatteryPercentage_);
+}
+
+void DisplayModule::renderMainPageTopRegion(const MainPageRegionBounds& bounds) {
+  display_.fillRect(bounds.x, bounds.y, bounds.width, bounds.height, GxEPD_WHITE);
+  renderMainPageTopTime();
+  renderMainPageTopBatteryStatus();
 }
 
 void DisplayModule::renderMainPageSidebarRegion(const MainPageRegionBounds& bounds) {
@@ -852,6 +1013,18 @@ void DisplayModule::markAllMainPageRegionsDirty() {
   }
 }
 
+void DisplayModule::markMainPageTopTimeDirty() {
+  mainPageTopPartialState_.timeDirty = true;
+  MainPageRegionState& state = getMainPageRegionState(MainPageRegion::kTop);
+  state.dirty = true;
+}
+
+void DisplayModule::markMainPageTopBatteryDirty() {
+  mainPageTopPartialState_.batteryDirty = true;
+  MainPageRegionState& state = getMainPageRegionState(MainPageRegion::kTop);
+  state.dirty = true;
+}
+
 void DisplayModule::updateMainPageRegionStateAfterRefresh(MainPageRegion region,
                                                           bool fullRefresh) {
   MainPageRegionState& state = getMainPageRegionState(region);
@@ -865,12 +1038,22 @@ void DisplayModule::updateMainPageRegionStateAfterRefresh(MainPageRegion region,
   state.containsRed = state.willDrawRed;
   state.willDrawRed = false;
   state.dirty = false;
+
+  if (region == MainPageRegion::kTop) {
+    mainPageTopPartialState_.timeDirty = false;
+    mainPageTopPartialState_.batteryDirty = false;
+  }
 }
 
 void DisplayModule::markMainPageRegionDirty(MainPageRegion region, bool willDrawRed) {
   MainPageRegionState& state = getMainPageRegionState(region);
   state.dirty = true;
   state.willDrawRed = state.willDrawRed || willDrawRed;
+
+  if (region == MainPageRegion::kTop) {
+    mainPageTopPartialState_.timeDirty = true;
+    mainPageTopPartialState_.batteryDirty = true;
+  }
 }
 
 void DisplayModule::resetMainPageRegionStateAfterFullRefresh() {
@@ -885,6 +1068,9 @@ void DisplayModule::resetMainPageRegionStateAfterFullRefresh() {
   for (MainPageRegion region : regions) {
     updateMainPageRegionStateAfterRefresh(region, true);
   }
+
+  mainPageTopTimeRenderedBounds_ = getCurrentMainPageTopTimeBounds();
+  mainPageTopBatteryRenderedBounds_ = getCurrentMainPageTopBatteryStatusBounds();
 }
 
 void DisplayModule::renderLowBattery() {
