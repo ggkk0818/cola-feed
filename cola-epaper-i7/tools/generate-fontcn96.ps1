@@ -12,11 +12,13 @@ $currentBytes = New-Object System.Collections.Generic.List[string]
 $glyphWidth = 64
 $glyphHeight = 127
 $bytesPerRow = $glyphWidth / 8
+$digitOneWidth = 51
+$digitOneAdvance = 52
+$digitOneXOffset = $glyphWidth - $digitOneWidth
 
-function Get-GlyphMetrics {
+function Get-GlyphBounds {
   param(
-    [string[]]$Bytes,
-    [uint32]$CodePoint
+    [string[]]$Bytes
   )
 
   $minX = $glyphWidth
@@ -45,11 +47,69 @@ function Get-GlyphMetrics {
   }
 
   if ($maxX -lt $minX) {
-    $minX = 0
-    $trimmedWidth = 0
+    return [pscustomobject]@{
+      MinX = 0
+      MaxX = -1
+      Width = 0
+    }
   }
-  else {
-    $trimmedWidth = ($maxX - $minX) + 1
+
+  return [pscustomobject]@{
+    MinX = $minX
+    MaxX = $maxX
+    Width = ($maxX - $minX) + 1
+  }
+}
+
+function Shift-GlyphBytesRight {
+  param(
+    [string[]]$Bytes,
+    [int]$Shift
+  )
+
+  if ($Shift -le 0) {
+    return @($Bytes)
+  }
+
+  $shiftedBytes = New-Object System.Collections.Generic.List[string]
+
+  for ($rowIndex = 0; $rowIndex -lt $glyphHeight; $rowIndex++) {
+    [uint64]$rowValue = 0
+    $rowOffset = $rowIndex * $bytesPerRow
+
+    for ($byteIndex = 0; $byteIndex -lt $bytesPerRow; $byteIndex++) {
+      $rowByte = [Convert]::ToByte($Bytes[$rowOffset + $byteIndex], 16)
+      $rowValue = ($rowValue -shl 8) -bor [uint64]$rowByte
+    }
+
+    $rowValue = $rowValue -shr $Shift
+
+    for ($byteIndex = 0; $byteIndex -lt $bytesPerRow; $byteIndex++) {
+      $shiftBits = ($bytesPerRow - 1 - $byteIndex) * 8
+      $shiftedByte = [byte](($rowValue -shr $shiftBits) -band 0xFF)
+      $shiftedBytes.Add(('0X{0:X2}' -f $shiftedByte))
+    }
+  }
+
+  return @($shiftedBytes)
+}
+
+function Get-GlyphMetrics {
+  param(
+    [string[]]$Bytes,
+    [uint32]$CodePoint
+  )
+
+  $bounds = Get-GlyphBounds -Bytes $Bytes
+  $minX = $bounds.MinX
+  $trimmedWidth = $bounds.Width
+
+  if ($CodePoint -eq 0x31) {
+    return [pscustomobject]@{
+      XOffset = $digitOneXOffset
+      Width = $digitOneWidth
+      Advance = $digitOneAdvance
+    }
   }
 
   $useTrimmedMetrics = ((($CodePoint -ge 0x21) -and ($CodePoint -le 0x7E)) -or
@@ -94,6 +154,23 @@ if ($null -ne $currentChar -and $currentBytes.Count -gt 0) {
 
 if ($glyphs.Count -eq 0) {
   throw 'No glyphs parsed from font file.'
+}
+
+for ($index = 0; $index -lt $glyphs.Count; $index++) {
+  $glyph = $glyphs[$index]
+  $codePoint = [System.Char]::ConvertToUtf32($glyph.Char, 0)
+  if ($codePoint -ne 0x31) {
+    continue
+  }
+
+  $bounds = Get-GlyphBounds -Bytes $glyph.Bytes
+  if ($bounds.MaxX -lt 0) {
+    continue
+  }
+
+  $targetRightEdge = $digitOneXOffset + $digitOneWidth - 1
+  $shiftRight = $targetRightEdge - $bounds.MaxX
+  $glyph.Bytes = @(Shift-GlyphBytesRight -Bytes $glyph.Bytes -Shift $shiftRight)
 }
 
 $header = @'
