@@ -4,6 +4,8 @@
 
 class I2cModule {
  public:
+  static constexpr uint8_t kActivityInterruptPin = 10;
+
   struct AccelerationSample {
     float xG = NAN;
     float yG = NAN;
@@ -55,6 +57,7 @@ class I2cModule {
   const EnvironmentSample& getEnvironmentSample() const;
   const BatterySample& getBatterySample() const;
   const SensorAvailability& getAvailability() const;
+  uint32_t getNextUpdateDueMs(uint32_t nowMs) const;
 
   bool isBusInitialized() const;
   bool hasPendingActivityEvent() const;

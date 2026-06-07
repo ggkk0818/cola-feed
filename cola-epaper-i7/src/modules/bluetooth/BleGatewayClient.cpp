@@ -9,6 +9,9 @@
 #include <BLEScan.h>
 #include <BLEUUID.h>
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
 namespace {
 
 constexpr const char* kGatewayRequestDeviceName = "Cola-ePaper";
@@ -22,6 +25,15 @@ constexpr uint32_t kRequestTimeoutMs = 10000UL;
 constexpr uint32_t kScanStepIntervalMs = 1000UL;
 
 BleGatewayClient* gBleGatewayClientInstance = nullptr;
+
+void yieldToScheduler() {
+  if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING) {
+    vTaskDelay(1);
+    return;
+  }
+
+  delay(1);
+}
 
 void onGatewayNotify(BLERemoteCharacteristic* /*characteristic*/, uint8_t* data, size_t length,
                      bool /*isNotify*/) {
@@ -158,6 +170,46 @@ void BleGatewayClient::update() {
 
 const BleGatewayClient::StatusSnapshot& BleGatewayClient::getStatus() const { return status_; }
 
+uint32_t BleGatewayClient::getNextWorkDueMs(uint32_t nowMs) const {
+  if (!status_.initialized) {
+    return nowMs;
+  }
+
+  switch (state_) {
+    case State::kIdle:
+      return nowMs >= nextRequestDueMs_ ? nowMs : nextRequestDueMs_;
+
+    case State::kScanning: {
+      const uint32_t timeoutDueMs = status_.requestStartedMs + kRequestTimeoutMs;
+      if (!gatewayAddress_.isEmpty()) {
+        return nowMs;
+      }
+
+      if (lastScanAttemptMs_ == 0 || (nowMs - lastScanAttemptMs_) >= kScanStepIntervalMs) {
+        return nowMs;
+      }
+
+      const uint32_t nextScanDueMs = lastScanAttemptMs_ + kScanStepIntervalMs;
+      return nextScanDueMs < timeoutDueMs ? nextScanDueMs : timeoutDueMs;
+    }
+
+    case State::kConnectPending:
+      return nowMs;
+
+    case State::kWaitingForResponse: {
+      if (hasPendingPayload_) {
+        return nowMs;
+      }
+
+      const uint32_t timeoutDueMs = status_.requestStartedMs + kRequestTimeoutMs;
+      const uint32_t nextPollDueMs = nowMs + 100UL;
+      return nextPollDueMs < timeoutDueMs ? nextPollDueMs : timeoutDueMs;
+    }
+  }
+
+  return nowMs;
+}
+
 void BleGatewayClient::beginRequest() {
   status_.requestInFlight = true;
   status_.timedOut = false;
@@ -200,6 +252,7 @@ bool BleGatewayClient::scanForGateway() {
     return false;
   }
 
+  yieldToScheduler();
   BLEScanResults* scanResults = scan_->start(1, false);
   if (scanResults == nullptr) {
     return false;
@@ -220,6 +273,7 @@ bool BleGatewayClient::scanForGateway() {
   }
 
   scan_->clearResults();
+  yieldToScheduler();
   return !gatewayAddress_.isEmpty();
 }
 
@@ -235,6 +289,7 @@ bool BleGatewayClient::connectAndRequest() {
     return false;
   }
 
+  yieldToScheduler();
   BLEAddress gatewayAddress(gatewayAddress_);
   if (!client_->connect(gatewayAddress)) {
     disconnectClient();
@@ -243,12 +298,14 @@ bool BleGatewayClient::connectAndRequest() {
 
   client_->setMTU(517);
 
+  yieldToScheduler();
   BLERemoteService* feedService = client_->getService(BLEUUID(kFeedServiceUuid));
   if (feedService == nullptr) {
     disconnectClient();
     return false;
   }
 
+  yieldToScheduler();
   feedDataCharacteristic_ = feedService->getCharacteristic(BLEUUID(kFeedDataCharacteristicUuid));
   broadcastCharacteristic_ = feedService->getCharacteristic(BLEUUID(kBroadcastCharacteristicUuid));
   if (feedDataCharacteristic_ == nullptr || broadcastCharacteristic_ == nullptr) {
@@ -261,6 +318,7 @@ bool BleGatewayClient::connectAndRequest() {
 
   const String requestPayload = String("{\"device_name\":\"") + kGatewayRequestDeviceName + "\"}";
   broadcastCharacteristic_->writeValue(requestPayload, false);
+  yieldToScheduler();
   return true;
 }
 

@@ -422,6 +422,10 @@ void DisplayModule::renderMainPage() {
   hibernate();
 }
 
+bool DisplayModule::hasPendingMainPageRender() const {
+  return shouldRenderMainPageFullRefresh() || mainPageTopState_.dirty;
+}
+
 DisplayModule::MainPageRegionBounds DisplayModule::getMainPageTopBounds() const {
   return MainPageRegionBounds{0, 0, static_cast<int16_t>(display_.width()),
                               kMainPageTopHeight};

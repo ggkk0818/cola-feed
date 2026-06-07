@@ -30,6 +30,7 @@ class DisplayModule {
   void renderLowBattery();
   void renderLogo();
   void hibernate();
+  bool hasPendingMainPageRender() const;
 
  private:
   enum class MainPageRegion : uint8_t {

@@ -4,13 +4,15 @@
 
 #include <cmath>
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
 namespace {
 constexpr uint8_t kI2cSclPin = 25;
 constexpr uint8_t kI2cSdaPin = 26;
 constexpr uint32_t kI2cFrequencyHz = 400000;
 
 constexpr uint8_t kAdxl343Address = 0x53;
-constexpr uint8_t kAdxl343InterruptPin = 10;
 constexpr uint8_t kAdxl343ExpectedDeviceId = 0xE5;
 constexpr uint8_t kAdxl343RegDeviceId = 0x00;
 constexpr uint8_t kAdxl343RegThreshAct = 0x24;
@@ -62,6 +64,23 @@ void IRAM_ATTR onAdxl343Interrupt() { gAdxl343InterruptRaised = true; }
 
 bool isFiniteFloat(float value) { return std::isfinite(value); }
 
+void sleepWithScheduler(uint32_t delayMs) {
+  if (delayMs == 0) {
+    return;
+  }
+
+  if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING) {
+    TickType_t ticks = pdMS_TO_TICKS(delayMs);
+    if (ticks == 0) {
+      ticks = 1;
+    }
+    vTaskDelay(ticks);
+    return;
+  }
+
+  delay(delayMs);
+}
+
 float clampPercentage(float value) {
   if (value < 0.0f) {
     return 0.0f;
@@ -95,7 +114,7 @@ bool I2cModule::begin() {
 
   Wire.setTimeOut(50);
 
-  pinMode(kAdxl343InterruptPin, INPUT);
+  pinMode(kActivityInterruptPin, INPUT);
   gAdxl343InterruptRaised = false;
   activityEventLatched_ = false;
 
@@ -104,7 +123,7 @@ bool I2cModule::begin() {
   availability_.fuelGauge = initializeMax17048();
 
   if (availability_.accelerometer) {
-    attachInterrupt(digitalPinToInterrupt(kAdxl343InterruptPin), onAdxl343Interrupt, RISING);
+    attachInterrupt(digitalPinToInterrupt(kActivityInterruptPin), onAdxl343Interrupt, RISING);
   }
 
   update();
@@ -119,8 +138,10 @@ void I2cModule::update() {
   const uint32_t nowMs = millis();
 
   if (availability_.accelerometer) {
+    const bool hadLatchedActivity = activityEventLatched_;
     handleActivityInterrupt();
-    if (accelerationSample_.timestampMs == 0 ||
+    const bool shouldRefreshOnActivity = activityEventLatched_ && !hadLatchedActivity;
+    if (shouldRefreshOnActivity || accelerationSample_.timestampMs == 0 ||
         (nowMs - lastAccelerationPollMs_) >= kAccelerationPollIntervalMs) {
       updateAcceleration(nowMs);
     }
@@ -153,6 +174,42 @@ const I2cModule::EnvironmentSample& I2cModule::getEnvironmentSample() const {
 const I2cModule::BatterySample& I2cModule::getBatterySample() const { return batterySample_; }
 
 const I2cModule::SensorAvailability& I2cModule::getAvailability() const { return availability_; }
+
+uint32_t I2cModule::getNextUpdateDueMs(uint32_t nowMs) const {
+  if (!busInitialized_) {
+    return nowMs;
+  }
+
+  bool hasAnySensor = false;
+  uint32_t nextDueMs = nowMs;
+
+  if (availability_.accelerometer) {
+    hasAnySensor = true;
+    const uint32_t accelerationDueMs =
+        accelerationSample_.timestampMs == 0 ? nowMs : (lastAccelerationPollMs_ + kAccelerationPollIntervalMs);
+    nextDueMs = accelerationDueMs;
+  }
+
+  if (availability_.environment) {
+    const uint32_t environmentDueMs =
+        environmentSample_.timestampMs == 0 ? nowMs : (lastEnvironmentPollMs_ + kEnvironmentPollIntervalMs);
+    nextDueMs = !hasAnySensor || environmentDueMs < nextDueMs ? environmentDueMs : nextDueMs;
+    hasAnySensor = true;
+  }
+
+  if (availability_.fuelGauge) {
+    const uint32_t batteryDueMs =
+        batterySample_.timestampMs == 0 ? nowMs : (lastBatteryPollMs_ + kBatteryPollIntervalMs);
+    nextDueMs = !hasAnySensor || batteryDueMs < nextDueMs ? batteryDueMs : nextDueMs;
+    hasAnySensor = true;
+  }
+
+  if (activityEventLatched_) {
+    return nowMs;
+  }
+
+  return hasAnySensor ? nextDueMs : nowMs;
+}
 
 bool I2cModule::isBusInitialized() const { return busInitialized_; }
 
@@ -195,7 +252,7 @@ bool I2cModule::initializeShtc3() {
     return false;
   }
 
-  delay(1);
+  sleepWithScheduler(1);
   writeCommand(kShtc3Address, kShtc3SleepCommand);
   return true;
 }
@@ -346,14 +403,14 @@ bool I2cModule::readShtc3Environment(EnvironmentSample& sample, uint32_t nowMs) 
     return false;
   }
 
-  delay(1);
+  sleepWithScheduler(1);
 
   if (!writeCommand(kShtc3Address, kShtc3MeasureNormalTFirstCommand)) {
     writeCommand(kShtc3Address, kShtc3SleepCommand);
     return false;
   }
 
-  delay(kShtc3MeasurementDelayMs);
+  sleepWithScheduler(kShtc3MeasurementDelayMs);
 
   uint8_t bytes[6] = {0};
   const bool readOk = readBytes(kShtc3Address, bytes, sizeof(bytes));

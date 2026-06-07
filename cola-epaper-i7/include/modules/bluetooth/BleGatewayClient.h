@@ -25,6 +25,7 @@ class BleGatewayClient {
   bool begin();
   void update();
   void handleNotification(const uint8_t* data, size_t length);
+  uint32_t getNextWorkDueMs(uint32_t nowMs) const;
 
   const StatusSnapshot& getStatus() const;
 
