@@ -42,7 +42,7 @@ constexpr uint8_t kMax17048Address = 0x36;
 constexpr uint8_t kMax17048RegVcell = 0x02;
 constexpr uint8_t kMax17048RegSoc = 0x04;
 
-constexpr uint32_t kAccelerationPollIntervalMs = 200;
+constexpr uint32_t kAccelerationPollIntervalMs = 5000;
 constexpr uint32_t kEnvironmentPollIntervalMs = 60000;
 constexpr uint32_t kBatteryPollIntervalMs = 5000;
 constexpr uint32_t kShtc3MeasurementDelayMs = 15;
