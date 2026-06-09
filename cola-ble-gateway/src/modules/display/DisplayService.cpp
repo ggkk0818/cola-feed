@@ -53,10 +53,12 @@ void DisplayService::showConnectResult(bool success, const String& message) {
   enqueue(command);
 }
 
-void DisplayService::showBleMeshStatus(uint16_t clientCount) {
+void DisplayService::showBleMeshStatus(uint16_t clientCount, uint16_t feedRecordCount, bool hasWeatherData) {
   DisplayCommand command;
   command.type = CommandType::kBleMeshStatus;
-  command.count = clientCount;
+  command.clientCount = clientCount;
+  command.feedRecordCount = feedRecordCount;
+  command.hasWeatherData = hasWeatherData;
   enqueue(command);
 }
 
@@ -151,6 +153,10 @@ void DisplayService::renderConnectResult(const DisplayCommand& command) {
 void DisplayService::renderBleMeshStatus(const DisplayCommand& command) {
   lcd_.clearScreen(ST77XX_BLACK);
   lcd_.printText("BLE mesh", 0, 18, ST77XX_CYAN, 1);
-  lcd_.printText("Clients:", 0, 42, ST77XX_WHITE, 1);
-  lcd_.printText(String(command.count), 60, 42, ST77XX_GREEN, 1);
+  lcd_.printText("Clients:", 0, 36, ST77XX_WHITE, 1);
+  lcd_.printText(String(command.clientCount), 60, 36, ST77XX_GREEN, 1);
+  lcd_.printText("Records:", 0, 52, ST77XX_WHITE, 1);
+  lcd_.printText(String(command.feedRecordCount), 60, 52, ST77XX_GREEN, 1);
+  lcd_.printText("Weather:", 0, 68, ST77XX_WHITE, 1);
+  lcd_.printText(command.hasWeatherData ? "Yes" : "No", 60, 68, ST77XX_GREEN, 1);
 }

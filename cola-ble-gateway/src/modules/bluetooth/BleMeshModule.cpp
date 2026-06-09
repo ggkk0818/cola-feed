@@ -261,6 +261,7 @@ bool BleMeshModule::replaceFeedCache(const String& serverTime,
   feedCache_.weatherDataJson = weatherDataJson;
   feedCache_.weatherDataIsNull = weatherDataIsNull;
   unlock();
+  updateScreen();
   return true;
 }
 
@@ -490,8 +491,12 @@ void BleMeshModule::updateScreen() {
   }
 
   const uint16_t clientCount = clientCount_;
+  const size_t recordCount = feedCache_.records.size();
+  const uint16_t feedRecordCount =
+      recordCount > UINT16_MAX ? UINT16_MAX : static_cast<uint16_t>(recordCount);
+  const bool hasWeatherData = !feedCache_.weatherDataIsNull && !feedCache_.weatherDataJson.isEmpty();
   unlock();
-  display_.showBleMeshStatus(clientCount);
+  display_.showBleMeshStatus(clientCount, feedRecordCount, hasWeatherData);
 }
 
 bool BleMeshModule::lock(TickType_t waitTicks) const {

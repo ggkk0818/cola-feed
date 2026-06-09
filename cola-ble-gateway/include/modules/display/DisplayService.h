@@ -16,7 +16,7 @@ class DisplayService {
   void showProvisioning(const String& apSsid, const char* password);
   void showConnecting(const String& ssid);
   void showConnectResult(bool success, const String& message);
-  void showBleMeshStatus(uint16_t clientCount);
+  void showBleMeshStatus(uint16_t clientCount, uint16_t feedRecordCount, bool hasWeatherData);
 
  private:
   enum class CommandType : uint8_t {
@@ -31,7 +31,9 @@ class DisplayService {
     char primary[96] = {0};
     char secondary[96] = {0};
     bool success = false;
-    uint16_t count = 0;
+    uint16_t clientCount = 0;
+    uint16_t feedRecordCount = 0;
+    bool hasWeatherData = false;
   };
 
   bool enqueue(const DisplayCommand& command);
