@@ -168,19 +168,30 @@ class BroadcastWriteCallbacks : public BLECharacteristicCallbacks {
 
 }  // namespace
 
-BleMeshModule::BleMeshModule(LcdModule& lcd) : lcd_(lcd) {}
+BleMeshModule::BleMeshModule(DisplayService& display) : display_(display) {}
 
 void BleMeshModule::begin() {
+  if (mutex_ == nullptr) {
+    mutex_ = xSemaphoreCreateRecursiveMutex();
+    if (mutex_ == nullptr) {
+      Serial.println("[BLE] Failed to create BLE state mutex.");
+    }
+  }
+
   refreshFeedCache();
 }
 
 void BleMeshModule::loop() {
-  if (!meshRunning_) {
+  lock();
+  const bool meshRunning = meshRunning_;
+  unlock();
+  if (!meshRunning) {
     return;
   }
 
   processPendingBroadcast();
 
+  lock();
   if (pendingFeedTransfer_.active && feedDataCharacteristic_ != nullptr) {
     const uint32_t nowMs = millis();
     if (pendingFeedTransfer_.nextChunkIndex == 0 ||
@@ -211,15 +222,23 @@ void BleMeshModule::loop() {
       }
     }
   }
+  unlock();
 
-  if (!restartAdvertisingPending_ || bleServer_ == nullptr) {
+  lock();
+  BLEServer* serverToRestart = nullptr;
+  if (restartAdvertisingPending_ && bleServer_ != nullptr) {
+    serverToRestart = bleServer_;
+    restartAdvertisingPending_ = false;
+  }
+  unlock();
+
+  if (serverToRestart == nullptr) {
     return;
   }
 
   // Restart advertising in the main loop instead of callback context to avoid
   // race conditions in some BLE stacks when a client disconnects.
-  bleServer_->startAdvertising();
-  restartAdvertisingPending_ = false;
+  serverToRestart->startAdvertising();
 }
 
 void BleMeshModule::handleWifiStateChange(WifiProvisioningModule::ConnectionState state) {
@@ -235,11 +254,13 @@ bool BleMeshModule::replaceFeedCache(const String& serverTime,
                                      const std::vector<FeedRecord>& records,
                                      const String& weatherDataJson,
                                      bool weatherDataIsNull) {
+  lock();
   feedCache_.sourceServerTime = serverTime;
   feedCache_.receivedAtMs = millis();
   feedCache_.records = records;
   feedCache_.weatherDataJson = weatherDataJson;
   feedCache_.weatherDataIsNull = weatherDataIsNull;
+  unlock();
   return true;
 }
 
@@ -288,6 +309,7 @@ void BleMeshModule::stopMesh() {
   feedDataCharacteristic_ = nullptr;
   broadcastCharacteristic_ = nullptr;
 
+  lock();
   meshRunning_ = false;
   restartAdvertisingPending_ = false;
   clientCount_ = 0;
@@ -299,17 +321,21 @@ void BleMeshModule::stopMesh() {
   pendingFeedTransfer_.nextChunkIndex = 0;
   pendingFeedTransfer_.lastChunkSentAtMs = 0;
   pendingFeedTransfer_.active = false;
+  unlock();
 }
 
 void BleMeshModule::refreshFeedCache() {
+  lock();
   feedCache_.sourceServerTime = "";
   feedCache_.receivedAtMs = 0;
   feedCache_.records.clear();
   feedCache_.weatherDataJson = "";
   feedCache_.weatherDataIsNull = true;
+  unlock();
 }
 
 String BleMeshModule::buildFeedPayloadJson() const {
+  lock();
   const size_t docCapacity = 2048U + (feedCache_.records.size() * 256U);
   DynamicJsonDocument doc(docCapacity);
   doc["serverTime"] = buildCurrentServerTime(feedCache_.sourceServerTime, feedCache_.receivedAtMs);
@@ -338,11 +364,14 @@ String BleMeshModule::buildFeedPayloadJson() const {
   }
   payload += '}';
 
+  unlock();
   return payload;
 }
 
 void BleMeshModule::processPendingBroadcast() {
+  lock();
   if (!pendingBroadcastRequest_.pending) {
+    unlock();
     return;
   }
 
@@ -357,6 +386,7 @@ void BleMeshModule::processPendingBroadcast() {
   pendingBroadcastRequest_.payload[0] = '\0';
 
   if (feedDataCharacteristic_ == nullptr) {
+    unlock();
     Serial.println("[BLE] Feed payload notify skipped: feed characteristic unavailable.");
     return;
   }
@@ -372,6 +402,7 @@ void BleMeshModule::processPendingBroadcast() {
     Serial.printf("[BLE] Broadcast device_name=%s\n", deviceName.c_str());
     if (!deviceName.isEmpty() && deviceName != "Cola-ePaper") {
       Serial.printf("[BLE] Broadcast ignored for device_name=%s\n", deviceName.c_str());
+      unlock();
       return;
     }
   }
@@ -389,27 +420,34 @@ void BleMeshModule::processPendingBroadcast() {
                 static_cast<unsigned>(feedPayload.length()),
                 static_cast<unsigned>(kFeedChunkPayloadBytes),
                 static_cast<unsigned>(pendingFeedTransfer_.totalChunks));
+  unlock();
 }
 
 void BleMeshModule::onClientConnected() {
+  lock();
   ++clientCount_;
+  unlock();
   updateScreen();
 }
 
 void BleMeshModule::onClientDisconnected() {
+  lock();
   if (clientCount_ > 0) {
     --clientCount_;
   }
 
   restartAdvertisingPending_ = true;
+  unlock();
   updateScreen();
 }
 
 void BleMeshModule::onClientBroadcast(const String& payload) {
+  lock();
   if (!meshRunning_ || feedDataCharacteristic_ == nullptr) {
     Serial.printf("[BLE] Broadcast ignored: meshRunning=%d, feedCharReady=%d\n",
                   meshRunning_ ? 1 : 0,
                   feedDataCharacteristic_ != nullptr ? 1 : 0);
+    unlock();
     return;
   }
 
@@ -421,16 +459,19 @@ void BleMeshModule::onClientBroadcast(const String& payload) {
     Serial.printf("[BLE] Broadcast ignored: payload too large for queue (%u >= %u)\n",
                   static_cast<unsigned>(payload.length()),
                   static_cast<unsigned>(kPendingBroadcastPayloadMaxBytes));
+    unlock();
     return;
   }
 
   if (pendingBroadcastRequest_.pending) {
     Serial.println("[BLE] Broadcast ignored: previous request still pending.");
+    unlock();
     return;
   }
 
   if (pendingFeedTransfer_.active) {
     Serial.println("[BLE] Broadcast ignored: feed transfer already in progress.");
+    unlock();
     return;
   }
 
@@ -438,15 +479,31 @@ void BleMeshModule::onClientBroadcast(const String& payload) {
   pendingBroadcastRequest_.payload[payload.length()] = '\0';
   pendingBroadcastRequest_.length = static_cast<size_t>(payload.length());
   pendingBroadcastRequest_.pending = true;
+  unlock();
 }
 
-void BleMeshModule::updateScreen() const {
+void BleMeshModule::updateScreen() {
+  lock();
   if (!meshRunning_) {
+    unlock();
     return;
   }
 
-  lcd_.clearScreen(ST77XX_BLACK);
-  lcd_.printUtf8("蓝牙模式", 0, 18, ST77XX_CYAN);
-  lcd_.printUtf8("客户端数量", 0, 42, ST77XX_WHITE);
-  lcd_.printText(String(clientCount_), 96, 42, ST77XX_GREEN, 1);
+  const uint16_t clientCount = clientCount_;
+  unlock();
+  display_.showBleMeshStatus(clientCount);
+}
+
+bool BleMeshModule::lock(TickType_t waitTicks) const {
+  if (mutex_ == nullptr) {
+    return true;
+  }
+
+  return xSemaphoreTakeRecursive(mutex_, waitTicks) == pdTRUE;
+}
+
+void BleMeshModule::unlock() const {
+  if (mutex_ != nullptr) {
+    xSemaphoreGiveRecursive(mutex_);
+  }
 }

@@ -8,7 +8,7 @@
 
 #include <functional>
 
-#include "modules/display/LcdModule.h"
+#include "modules/display/DisplayService.h"
 #include "modules/storage/TfCardModule.h"
 
 class BleMeshModule;
@@ -24,7 +24,7 @@ class WifiProvisioningModule {
 
   using StateChangedCallback = std::function<void(ConnectionState)>;
 
-  WifiProvisioningModule(LcdModule& lcd, TfCardModule& tfCard);
+  WifiProvisioningModule(DisplayService& display, TfCardModule& tfCard);
 
   void begin();
   void loop();
@@ -76,7 +76,7 @@ class WifiProvisioningModule {
   void showConnectingScreen(const String& ssid) const;
   void showConnectResult(bool success, const String& message) const;
 
-  LcdModule& lcd_;
+  DisplayService& display_;
   TfCardModule& tfCard_;
 
   Preferences preferences_;

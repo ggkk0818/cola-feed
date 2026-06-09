@@ -74,19 +74,10 @@ constexpr const char* kRsaPrivateKeyPem =
 
 constexpr const char* kRsaPrivateKeyPassword = "abc123";
 
-bool containsNonAscii(const String& text) {
-  for (size_t i = 0; i < text.length(); ++i) {
-    if (static_cast<uint8_t>(text[i]) & 0x80) {
-      return true;
-    }
-  }
-  return false;
-}
-
 }  // namespace
 
-WifiProvisioningModule::WifiProvisioningModule(LcdModule& lcd, TfCardModule& tfCard)
-    : lcd_(lcd), tfCard_(tfCard), webServer_(80) {}
+WifiProvisioningModule::WifiProvisioningModule(DisplayService& display, TfCardModule& tfCard)
+    : display_(display), tfCard_(tfCard), webServer_(80) {}
 
 void WifiProvisioningModule::attachBleMeshModule(BleMeshModule& bleMesh) {
   bleMesh_ = &bleMesh;
@@ -802,32 +793,13 @@ bool WifiProvisioningModule::decryptPassword(const String& encryptedPassword,
 }
 
 void WifiProvisioningModule::showProvisioningScreen() const {
-  lcd_.clearScreen(ST77XX_BLACK);
-  lcd_.printUtf8("配网模式", 0, 18, ST77XX_YELLOW);
-  lcd_.printText("WiFi:", 0, 38, ST77XX_WHITE, 1);
-  lcd_.printText(apSsid_, 36, 38, ST77XX_WHITE, 1);
-  lcd_.printText("PWD:", 0, 54, ST77XX_WHITE, 1);
-  lcd_.printText(kApPassword, 36, 54, ST77XX_WHITE, 1);
+  display_.showProvisioning(apSsid_, kApPassword);
 }
 
 void WifiProvisioningModule::showConnectingScreen(const String& ssid) const {
-  lcd_.clearScreen(ST77XX_BLACK);
-  lcd_.printUtf8("连接中...", 0, 20, ST77XX_WHITE);
-  if (containsNonAscii(ssid)) {
-    lcd_.printUtf8(ssid, 0, 44, ST77XX_WHITE);
-    return;
-  }
-
-  lcd_.printText(ssid, 0, 44, ST77XX_WHITE, 1);
+  display_.showConnecting(ssid);
 }
 
 void WifiProvisioningModule::showConnectResult(bool success, const String& message) const {
-  lcd_.clearScreen(ST77XX_BLACK);
-  lcd_.printUtf8(success ? "连接成功" : "连接失败", 0, 20, success ? ST77XX_GREEN : ST77XX_RED);
-  if (containsNonAscii(message)) {
-    lcd_.printUtf8(message, 0, 44, ST77XX_WHITE);
-    return;
-  }
-
-  lcd_.printText(message, 0, 44, ST77XX_WHITE, 1);
+  display_.showConnectResult(success, message);
 }

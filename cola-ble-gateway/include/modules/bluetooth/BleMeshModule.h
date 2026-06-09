@@ -1,10 +1,12 @@
 #pragma once
 
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 #include <vector>
 
-#include "modules/display/LcdModule.h"
+#include "modules/display/DisplayService.h"
 #include "modules/feed/FeedRecord.h"
 #include "modules/network/WifiProvisioningModule.h"
 
@@ -14,7 +16,7 @@ class BLECharacteristic;
 
 class BleMeshModule {
  public:
-  explicit BleMeshModule(LcdModule& lcd);
+  explicit BleMeshModule(DisplayService& display);
 
   void begin();
   void loop();
@@ -61,9 +63,12 @@ class BleMeshModule {
   String buildFeedPayloadJson() const;
   void processPendingBroadcast();
 
-  void updateScreen() const;
+  void updateScreen();
+  bool lock(TickType_t waitTicks = portMAX_DELAY) const;
+  void unlock() const;
 
-  LcdModule& lcd_;
+  DisplayService& display_;
+  mutable SemaphoreHandle_t mutex_ = nullptr;
 
   BLEServer* bleServer_ = nullptr;
   BLEService* feedService_ = nullptr;
