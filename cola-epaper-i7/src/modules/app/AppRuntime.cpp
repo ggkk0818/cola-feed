@@ -261,17 +261,35 @@ void AppRuntime::runDataTask() {
 
   for (;;) {
     i2cModule_.update();
-    bleGatewayClient_.update();
 
-    const uint32_t nowMs = millis();
-    const AppDisplayState nextState =
+    uint32_t nowMs = millis();
+    AppDisplayState nextState =
         AppDisplayUtils::buildDisplayState(i2cModule_, bleGatewayClient_, nowMs,
                                            hasPublishedState ? &lastPublishedState : nullptr);
+    bool publishedState = false;
 
     if (!hasPublishedState || !(nextState == lastPublishedState)) {
       lastPublishedState = nextState;
       hasPublishedState = true;
       publishDisplayState(nextState);
+      publishedState = true;
+    }
+
+    bleGatewayClient_.update();
+
+    nowMs = millis();
+    nextState = AppDisplayUtils::buildDisplayState(
+        i2cModule_, bleGatewayClient_, nowMs,
+        hasPublishedState ? &lastPublishedState : nullptr);
+
+    if (!hasPublishedState || !(nextState == lastPublishedState)) {
+      lastPublishedState = nextState;
+      hasPublishedState = true;
+      publishDisplayState(nextState);
+      publishedState = true;
+    }
+
+    if (publishedState) {
       continue;
     }
 

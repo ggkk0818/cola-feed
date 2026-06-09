@@ -80,7 +80,8 @@ class DisplayModule {
   const MainPageRegionState& getMainPageRegionState(MainPageRegion region) const;
 
   bool shouldRenderMainPageFullRefresh() const;
-  bool hasDirtyMainPageNonTopRegion() const;
+  bool hasDirtyMainPageFullRefreshOnlyRegion() const;
+  bool shouldRenderMainPageRegionFullRefresh(MainPageRegion region) const;
   bool shouldRefreshMainPageContent(const String& durationText, const String& timestampText,
                                     bool showTimestamp) const;
 

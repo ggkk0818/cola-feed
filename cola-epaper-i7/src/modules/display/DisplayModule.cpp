@@ -412,18 +412,27 @@ void DisplayModule::renderMainPage() {
     return;
   }
 
-  if (!mainPageTopState_.dirty) {
+  if (!mainPageTopState_.dirty && !mainPageSidebarIndoorState_.dirty) {
     return;
   }
 
-  renderMainPagePartialRefresh(MainPageRegion::kTop);
-  updateMainPageRegionStateAfterRefresh(MainPageRegion::kTop, false);
+  if (mainPageTopState_.dirty) {
+    renderMainPagePartialRefresh(MainPageRegion::kTop);
+    updateMainPageRegionStateAfterRefresh(MainPageRegion::kTop, false);
+  }
+
+  if (mainPageSidebarIndoorState_.dirty) {
+    renderMainPagePartialRefresh(MainPageRegion::kSidebarIndoor);
+    updateMainPageRegionStateAfterRefresh(MainPageRegion::kSidebarIndoor, false);
+  }
+
   hasRenderedMainPage_ = true;
   hibernate();
 }
 
 bool DisplayModule::hasPendingMainPageRender() const {
-  return shouldRenderMainPageFullRefresh() || mainPageTopState_.dirty;
+  return shouldRenderMainPageFullRefresh() || mainPageTopState_.dirty ||
+         mainPageSidebarIndoorState_.dirty;
 }
 
 DisplayModule::MainPageRegionBounds DisplayModule::getMainPageTopBounds() const {
@@ -642,17 +651,12 @@ bool DisplayModule::shouldRenderMainPageFullRefresh() const {
     return true;
   }
 
-  if (hasDirtyMainPageNonTopRegion()) {
+  if (hasDirtyMainPageFullRefreshOnlyRegion()) {
     return true;
   }
 
-  const MainPageRegionState& topState = getMainPageRegionState(MainPageRegion::kTop);
-  if (!topState.dirty) {
-    return false;
-  }
-
-  return topState.consecutivePartialRefreshes >= kMainPageMaxConsecutivePartialRefreshes ||
-         topState.containsRed || topState.willDrawRed;
+  return shouldRenderMainPageRegionFullRefresh(MainPageRegion::kTop) ||
+         shouldRenderMainPageRegionFullRefresh(MainPageRegion::kSidebarIndoor);
 }
 
 void DisplayModule::renderMainPageFullRefresh() {
@@ -725,10 +729,9 @@ void DisplayModule::renderMainPageTopPartialWindow(const MainPageRegionBounds& b
   } while (display_.nextPageBW());
 }
 
-bool DisplayModule::hasDirtyMainPageNonTopRegion() const {
+bool DisplayModule::hasDirtyMainPageFullRefreshOnlyRegion() const {
   const MainPageRegion regions[] = {
       MainPageRegion::kSidebarOutdoor,
-      MainPageRegion::kSidebarIndoor,
       MainPageRegion::kSidebarForecast,
       MainPageRegion::kContent,
   };
@@ -740,6 +743,16 @@ bool DisplayModule::hasDirtyMainPageNonTopRegion() const {
   }
 
   return false;
+}
+
+bool DisplayModule::shouldRenderMainPageRegionFullRefresh(MainPageRegion region) const {
+  const MainPageRegionState& state = getMainPageRegionState(region);
+  if (!state.dirty) {
+    return false;
+  }
+
+  return state.consecutivePartialRefreshes >= kMainPageMaxConsecutivePartialRefreshes ||
+         state.containsRed || state.willDrawRed;
 }
 
 bool DisplayModule::shouldRefreshMainPageContent(const String& durationText,
