@@ -26,6 +26,8 @@ constexpr const char* kPrefsPasswordKey = "password";
 constexpr const char* kApPassword = "12345678";
 constexpr uint8_t kDnsPort = 53;
 constexpr uint32_t kConnectTimeoutMs = 15000;
+constexpr uint8_t kBackgroundReconnectMaxAttempts = 5;
+constexpr uint32_t kBackgroundReconnectIntervalMs = 60000;
 
 constexpr const char* kHtmlRootPath = "/html";
 
@@ -138,23 +140,24 @@ void WifiProvisioningModule::loop() {
     webServer_.handleClient();
   }
 
+  if (backgroundReconnectActive_) {
+    handleBackgroundReconnect();
+  } else if (!provisioningModeActive_ && !pendingConnect_ && isConnected() &&
+             WiFi.status() != WL_CONNECTED) {
+    startBackgroundReconnect();
+  }
+
   const bool wifiConnectedForDiscovery =
-      !provisioningModeActive_ && !pendingConnect_ && isConnected() && WiFi.status() == WL_CONNECTED;
+      !provisioningModeActive_ && !pendingConnect_ && isConnected() && !backgroundReconnectActive_ &&
+      WiFi.status() == WL_CONNECTED;
   handleDiscoveryBroadcast(
       wifiConnectedForDiscovery, wifiConnectedForDiscovery ? WiFi.localIP().toString() : String());
-
-  // If station mode unexpectedly drops (router reboot, signal loss, etc.),
-  // leave BLE mode and return to provisioning mode automatically.
-  if (!provisioningModeActive_ && !pendingConnect_ && isConnected() && WiFi.status() != WL_CONNECTED) {
-    setState(ConnectionState::kDisconnected);
-    enterProvisioningMode();
-    return;
-  }
 
   if (!pendingConnect_) {
     return;
   }
 
+  clearBackgroundReconnect();
   pendingConnect_ = false;
   provisioningModeActive_ = false;
 
@@ -221,7 +224,101 @@ void WifiProvisioningModule::saveCredentials(const WifiCredentials& credentials)
   preferences_.putString(kPrefsPasswordKey, credentials.password);
 }
 
+void WifiProvisioningModule::startBackgroundReconnect() {
+  if (backgroundReconnectActive_) {
+    return;
+  }
+
+  WifiCredentials savedCredentials;
+  if (!loadSavedCredentials(&savedCredentials) || !savedCredentials.isValid()) {
+    Serial.println("[WiFi] Background reconnect skipped: saved credentials unavailable.");
+    enterProvisioningMode();
+    return;
+  }
+
+  Serial.printf("[WiFi] Connection lost; keeping BLE active and starting background reconnect to SSID=%s\n",
+                savedCredentials.ssid.c_str());
+
+  backgroundReconnectCredentials_ = savedCredentials;
+  backgroundReconnectActive_ = true;
+  backgroundReconnectAttemptInProgress_ = false;
+  backgroundReconnectAttempts_ = 0;
+  backgroundReconnectAttemptStartedMs_ = 0;
+  backgroundReconnectNextAttemptMs_ = millis();
+
+  beginBackgroundReconnectAttempt(backgroundReconnectNextAttemptMs_);
+}
+
+void WifiProvisioningModule::handleBackgroundReconnect() {
+  if (!backgroundReconnectActive_) {
+    return;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.printf("[WiFi] Background reconnect succeeded: ip=%s, attempts=%u\n",
+                  WiFi.localIP().toString().c_str(),
+                  static_cast<unsigned>(backgroundReconnectAttempts_));
+    clearBackgroundReconnect();
+    provisioningModeActive_ = false;
+    setupWebServer();
+    return;
+  }
+
+  const unsigned long nowMs = millis();
+  if (backgroundReconnectAttemptInProgress_) {
+    if ((nowMs - backgroundReconnectAttemptStartedMs_) < kConnectTimeoutMs) {
+      return;
+    }
+
+    backgroundReconnectAttemptInProgress_ = false;
+    backgroundReconnectNextAttemptMs_ = backgroundReconnectAttemptStartedMs_ + kBackgroundReconnectIntervalMs;
+    Serial.printf("[WiFi] Background reconnect attempt %u failed.\n",
+                  static_cast<unsigned>(backgroundReconnectAttempts_));
+
+    if (backgroundReconnectAttempts_ >= kBackgroundReconnectMaxAttempts) {
+      Serial.println("[WiFi] Background reconnect exhausted; entering provisioning mode.");
+      clearBackgroundReconnect();
+      enterProvisioningMode();
+    }
+    return;
+  }
+
+  if (backgroundReconnectAttempts_ < kBackgroundReconnectMaxAttempts &&
+      (nowMs - backgroundReconnectNextAttemptMs_) < 0x80000000UL) {
+    beginBackgroundReconnectAttempt(nowMs);
+  }
+}
+
+void WifiProvisioningModule::beginBackgroundReconnectAttempt(unsigned long nowMs) {
+  if (!backgroundReconnectActive_ || !backgroundReconnectCredentials_.isValid()) {
+    return;
+  }
+
+  ++backgroundReconnectAttempts_;
+  backgroundReconnectAttemptInProgress_ = true;
+  backgroundReconnectAttemptStartedMs_ = nowMs;
+  Serial.printf("[WiFi] Background reconnect attempt %u/%u to SSID=%s\n",
+                static_cast<unsigned>(backgroundReconnectAttempts_),
+                static_cast<unsigned>(kBackgroundReconnectMaxAttempts),
+                backgroundReconnectCredentials_.ssid.c_str());
+
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect(false, false);
+  WiFi.begin(backgroundReconnectCredentials_.ssid.c_str(), backgroundReconnectCredentials_.password.c_str());
+}
+
+void WifiProvisioningModule::clearBackgroundReconnect() {
+  backgroundReconnectActive_ = false;
+  backgroundReconnectAttemptInProgress_ = false;
+  backgroundReconnectAttempts_ = 0;
+  backgroundReconnectAttemptStartedMs_ = 0;
+  backgroundReconnectNextAttemptMs_ = 0;
+  backgroundReconnectCredentials_.ssid = "";
+  backgroundReconnectCredentials_.password = "";
+}
+
 bool WifiProvisioningModule::tryConnectStation(const WifiCredentials& credentials, bool saveOnSuccess) {
+  clearBackgroundReconnect();
   showConnectingScreen(credentials.ssid);
   setState(ConnectionState::kConnecting);
 
@@ -264,6 +361,7 @@ bool WifiProvisioningModule::tryConnectStation(const WifiCredentials& credential
 }
 
 void WifiProvisioningModule::enterProvisioningMode() {
+  clearBackgroundReconnect();
   WiFi.disconnect(true, true);
   delay(200);
 

@@ -48,6 +48,10 @@ class WifiProvisioningModule {
 
   bool tryConnectStation(const WifiCredentials& credentials, bool saveOnSuccess);
   void enterProvisioningMode();
+  void startBackgroundReconnect();
+  void handleBackgroundReconnect();
+  void beginBackgroundReconnectAttempt(unsigned long nowMs);
+  void clearBackgroundReconnect();
 
   void setupWebServer();
   void handleRootPage();
@@ -96,6 +100,12 @@ class WifiProvisioningModule {
 
   bool pendingConnect_ = false;
   WifiCredentials pendingCredentials_;
+  bool backgroundReconnectActive_ = false;
+  bool backgroundReconnectAttemptInProgress_ = false;
+  uint8_t backgroundReconnectAttempts_ = 0;
+  unsigned long backgroundReconnectAttemptStartedMs_ = 0;
+  unsigned long backgroundReconnectNextAttemptMs_ = 0;
+  WifiCredentials backgroundReconnectCredentials_;
   String apSsid_;
 
   ConnectionState state_ = ConnectionState::kDisconnected;
