@@ -14,6 +14,7 @@ constexpr int kLcdSclkPin = 5;
 constexpr int kLcdDcPin = 2;
 constexpr int kLcdResetPin = 1;
 constexpr int kLcdBacklightPin = 38;
+constexpr int kLcdButtonPin = 0;
 
 constexpr int kQwiicSdaPin = 44;
 constexpr int kQwiicSclPin = 43;

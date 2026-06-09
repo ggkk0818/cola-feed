@@ -14,6 +14,9 @@ class LcdModule {
   bool begin();
   void backlightOn();
   void backlightOff();
+  void setScreenEnabled(bool enabled);
+  void toggleScreen();
+  bool isScreenEnabled() const;
   void clearScreen(uint16_t color = ST77XX_BLACK);
   void printText(const String& text, int16_t x = 0, int16_t y = 0, uint16_t color = ST77XX_WHITE,
                  uint8_t textSize = 1);
@@ -33,4 +36,5 @@ class LcdModule {
   Adafruit_ST7735 tft_;
   U8G2_FOR_ADAFRUIT_GFX u8g2_;
   bool initialized_ = false;
+  bool screenEnabled_ = true;
 };

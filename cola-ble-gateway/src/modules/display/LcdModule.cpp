@@ -77,6 +77,7 @@ LcdModule::LcdModule()
 
 bool LcdModule::begin() {
   pinMode(board::kLcdBacklightPin, OUTPUT);
+  screenEnabled_ = true;
   backlightOn();
 
   tft_.initR(INITR_MINI160x80_PLUGIN);
@@ -101,11 +102,34 @@ bool LcdModule::begin() {
 void LcdModule::backlightOn() {
   pinMode(board::kLcdBacklightPin, OUTPUT);
   digitalWrite(board::kLcdBacklightPin, kBacklightOnLevel);
+  screenEnabled_ = true;
 }
 
 void LcdModule::backlightOff() {
   pinMode(board::kLcdBacklightPin, OUTPUT);
   digitalWrite(board::kLcdBacklightPin, kBacklightOffLevel);
+  screenEnabled_ = false;
+}
+
+void LcdModule::setScreenEnabled(bool enabled) {
+  if (enabled == screenEnabled_) {
+    return;
+  }
+
+  if (enabled) {
+    backlightOn();
+    return;
+  }
+
+  backlightOff();
+}
+
+void LcdModule::toggleScreen() {
+  setScreenEnabled(!screenEnabled_);
+}
+
+bool LcdModule::isScreenEnabled() const {
+  return screenEnabled_;
 }
 
 void LcdModule::clearScreen(uint16_t color) {

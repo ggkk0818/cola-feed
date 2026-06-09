@@ -3,16 +3,19 @@
 #include <freertos/event_groups.h>
 #include <freertos/task.h>
 
+#include "config/BoardPins.h"
 #include "modules/bluetooth/BleMeshModule.h"
 #include "modules/display/DisplayService.h"
 #include "modules/display/LcdModule.h"
 #include "modules/i2c/I2cModule.h"
+#include "modules/input/ButtonModule.h"
 #include "modules/led/RgbLedModule.h"
 #include "modules/network/WifiProvisioningModule.h"
 #include "modules/storage/TfCardModule.h"
 
 namespace {
 LcdModule lcd;
+ButtonModule lcdButton;
 TfCardModule tfCard;
 RgbLedModule led;
 I2cModule i2c;
@@ -37,6 +40,7 @@ void peripheralTask(void* /*parameter*/) {
   }
 
   lcd.begin();
+  lcdButton.begin(board::kLcdButtonPin, INPUT_PULLUP, LOW, 50);
   if (!display.begin()) {
     Serial.println("[BOOT] Display queue init failed.");
   }
@@ -57,6 +61,10 @@ void peripheralTask(void* /*parameter*/) {
   xEventGroupSetBits(systemEvents, kPeripheralReadyBit);
 
   for (;;) {
+    lcdButton.poll();
+    if (lcdButton.wasPressed()) {
+      lcd.toggleScreen();
+    }
     display.processNext(pdMS_TO_TICKS(100));
   }
 }
