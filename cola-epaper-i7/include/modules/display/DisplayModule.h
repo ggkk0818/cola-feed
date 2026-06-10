@@ -85,6 +85,8 @@ class DisplayModule {
   bool shouldRenderMainPageRegionFullRefresh(MainPageRegion region) const;
   bool shouldRefreshMainPageContent(const String& durationText, const String& timestampText,
                                     bool showTimestamp) const;
+  bool updateMainPageForecastData(const WeatherData::DailyForecastData* forecastDays,
+                                  size_t forecastDayCount);
 
   void renderMainPageFullRefresh();
   void renderMainPagePartialRefresh(MainPageRegion region);
@@ -126,6 +128,7 @@ class DisplayModule {
   String mainPageContentTimestamp_;
   bool mainPageContentTimestampVisible_ = false;
   WeatherData::SidebarWeatherData sidebarWeatherData_;
+  size_t sidebarForecastCount_ = 0;
   DeviceOrientation deviceOrientation_ = DeviceOrientation::kBottomEdgeDown;
   bool forceMainPageFullRefresh_ = false;
   bool hasRenderedMainPage_ = false;

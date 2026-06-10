@@ -125,6 +125,11 @@ bool isForecastDataBlank(const WeatherData::DailyForecastData& data) {
          data.iconDay == 0 && data.textDay.isEmpty();
 }
 
+size_t clampForecastDayCount(size_t forecastDayCount) {
+  return forecastDayCount < WeatherData::kForecastDayCount ? forecastDayCount
+                                                           : WeatherData::kForecastDayCount;
+}
+
 bool isOutdoorEnvironmentDataEqual(const WeatherData::OutdoorEnvironmentData& left,
                                    const WeatherData::OutdoorEnvironmentData& right) {
   return left.temp == right.temp && left.icon == right.icon && left.text == right.text;
@@ -588,10 +593,7 @@ DisplayModule::MainPageRegionBounds DisplayModule::getCurrentMainPageTopBatteryS
   const int16_t batteryIconY = topBounds.y + kBatteryStatusTopMargin;
   int16_t boundsLeft = batteryIconX;
 
-  if (mainPageCharging_ && mainPagePowerConnected_) {
-    boundsLeft = batteryIconX - (kBatteryStatusAuxIconGap * 2) -
-                 (kBatteryStatusAuxIconSize * 2);
-  } else if (mainPageCharging_ || mainPagePowerConnected_) {
+  if (mainPageCharging_ || mainPagePowerConnected_) {
     boundsLeft = batteryIconX - kBatteryStatusAuxIconGap - kBatteryStatusAuxIconSize;
   }
 
@@ -840,16 +842,11 @@ void DisplayModule::setMainPageTopTime(const String& topTimeText) {
 void DisplayModule::setMainPageSidebarWeatherData(const WeatherData::SidebarWeatherData& data) {
   const bool outdoorChanged = !isOutdoorEnvironmentDataEqual(sidebarWeatherData_.outdoor, data.outdoor);
   const bool indoorChanged = !isIndoorEnvironmentDataEqual(sidebarWeatherData_.indoor, data.indoor);
+  const bool forecastChanged =
+      updateMainPageForecastData(data.forecast, WeatherData::kForecastDayCount);
 
-  bool forecastChanged = false;
-  for (size_t index = 0; index < WeatherData::kForecastDayCount; ++index) {
-    if (!isDailyForecastDataEqual(sidebarWeatherData_.forecast[index], data.forecast[index])) {
-      forecastChanged = true;
-      break;
-    }
-  }
-
-  sidebarWeatherData_ = data;
+  sidebarWeatherData_.outdoor = data.outdoor;
+  sidebarWeatherData_.indoor = data.indoor;
 
   if (mainPageContentTimestampVisible_) {
     return;
@@ -900,11 +897,27 @@ void DisplayModule::setMainPageIndoorEnvironmentData(
 
 void DisplayModule::setMainPageForecastData(const WeatherData::DailyForecastData* forecastDays,
                                             size_t forecastDayCount) {
-  bool forecastChanged = false;
+  const bool forecastChanged = updateMainPageForecastData(forecastDays, forecastDayCount);
+
+  if (mainPageContentTimestampVisible_) {
+    return;
+  }
+
+  if (forecastChanged) {
+    markMainPageRegionDirty(MainPageRegion::kSidebarForecast);
+  }
+}
+
+bool DisplayModule::updateMainPageForecastData(
+    const WeatherData::DailyForecastData* forecastDays,
+    size_t forecastDayCount) {
+  const size_t nextForecastCount =
+      forecastDays == nullptr ? 0 : clampForecastDayCount(forecastDayCount);
+  bool forecastChanged = sidebarForecastCount_ != nextForecastCount;
 
   for (size_t index = 0; index < WeatherData::kForecastDayCount; ++index) {
     WeatherData::DailyForecastData nextForecast;
-    if (forecastDays != nullptr && index < forecastDayCount) {
+    if (forecastDays != nullptr && index < nextForecastCount) {
       nextForecast = forecastDays[index];
     }
 
@@ -914,13 +927,8 @@ void DisplayModule::setMainPageForecastData(const WeatherData::DailyForecastData
     }
   }
 
-  if (mainPageContentTimestampVisible_) {
-    return;
-  }
-
-  if (forecastChanged) {
-    markMainPageRegionDirty(MainPageRegion::kSidebarForecast);
-  }
+  sidebarForecastCount_ = nextForecastCount;
+  return forecastChanged;
 }
 
 void DisplayModule::setMainPageContentData(const String& durationText, const String& timestampText,
@@ -987,17 +995,14 @@ void DisplayModule::renderMainPageTopBatteryStatus() {
   const int16_t batteryIconY = bounds.y + kBatteryStatusTopMargin;
   const int16_t auxIconY =
       batteryIconY + ((kBatteryStatusIconHeight - kBatteryStatusAuxIconSize) / 2);
-  int16_t nextAuxIconX = batteryIconX - kBatteryStatusAuxIconGap - kBatteryStatusAuxIconSize;
+  const int16_t auxIconX = batteryIconX - kBatteryStatusAuxIconGap - kBatteryStatusAuxIconSize;
 
   if (mainPageCharging_) {
-    display_.drawBitmap(nextAuxIconX, auxIconY, ChargingImage24x24::kBitmap,
+    display_.drawBitmap(auxIconX, auxIconY, ChargingImage24x24::kBitmap,
                         ChargingImage24x24::kWidth, ChargingImage24x24::kHeight,
                         GxEPD_BLACK);
-    nextAuxIconX -= kBatteryStatusAuxIconGap + kBatteryStatusAuxIconSize;
-  }
-
-  if (mainPagePowerConnected_) {
-    display_.drawBitmap(nextAuxIconX, auxIconY, PowerImage24x24::kBitmap,
+  } else if (mainPagePowerConnected_) {
+    display_.drawBitmap(auxIconX, auxIconY, PowerImage24x24::kBitmap,
                         PowerImage24x24::kWidth, PowerImage24x24::kHeight, GxEPD_BLACK);
   }
 
@@ -1083,6 +1088,10 @@ void DisplayModule::renderMainPageSidebarForecastRegion(const MainPageRegionBoun
   for (size_t index = 0; index < WeatherData::kForecastDayCount; ++index) {
     const MainPageRegionBounds& grid = gridBounds[index];
     const WeatherData::DailyForecastData& forecast = sidebarWeatherData_.forecast[index];
+
+    if (index >= sidebarForecastCount_) {
+      continue;
+    }
 
     if (isForecastDataBlank(forecast)) {
       continue;
