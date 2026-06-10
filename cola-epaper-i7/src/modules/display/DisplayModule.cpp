@@ -412,7 +412,8 @@ void DisplayModule::renderMainPage() {
     return;
   }
 
-  if (!mainPageTopState_.dirty && !mainPageSidebarIndoorState_.dirty) {
+  if (!mainPageTopState_.dirty && !mainPageSidebarIndoorState_.dirty &&
+      !mainPageContentState_.dirty) {
     return;
   }
 
@@ -426,13 +427,18 @@ void DisplayModule::renderMainPage() {
     updateMainPageRegionStateAfterRefresh(MainPageRegion::kSidebarIndoor, false);
   }
 
+  if (mainPageContentState_.dirty) {
+    renderMainPagePartialRefresh(MainPageRegion::kContent);
+    updateMainPageRegionStateAfterRefresh(MainPageRegion::kContent, false);
+  }
+
   hasRenderedMainPage_ = true;
   hibernate();
 }
 
 bool DisplayModule::hasPendingMainPageRender() const {
   return shouldRenderMainPageFullRefresh() || mainPageTopState_.dirty ||
-         mainPageSidebarIndoorState_.dirty;
+         mainPageSidebarIndoorState_.dirty || mainPageContentState_.dirty;
 }
 
 DisplayModule::MainPageRegionBounds DisplayModule::getMainPageTopBounds() const {
@@ -656,7 +662,8 @@ bool DisplayModule::shouldRenderMainPageFullRefresh() const {
   }
 
   return shouldRenderMainPageRegionFullRefresh(MainPageRegion::kTop) ||
-         shouldRenderMainPageRegionFullRefresh(MainPageRegion::kSidebarIndoor);
+         shouldRenderMainPageRegionFullRefresh(MainPageRegion::kSidebarIndoor) ||
+         shouldRenderMainPageRegionFullRefresh(MainPageRegion::kContent);
 }
 
 void DisplayModule::renderMainPageFullRefresh() {
@@ -733,7 +740,6 @@ bool DisplayModule::hasDirtyMainPageFullRefreshOnlyRegion() const {
   const MainPageRegion regions[] = {
       MainPageRegion::kSidebarOutdoor,
       MainPageRegion::kSidebarForecast,
-      MainPageRegion::kContent,
   };
 
   for (MainPageRegion region : regions) {
