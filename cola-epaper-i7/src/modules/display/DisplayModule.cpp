@@ -1027,9 +1027,9 @@ void DisplayModule::renderMainPageSidebarOutdoorRegion(const MainPageRegionBound
 
   drawLeftBitmapText(labelFonts, String("室外"), bounds.x + 5, bounds.y + 15);
   drawWeatherIcon(display_, bounds.x + 5, bounds.y + 35, sidebarWeatherData_.outdoor.icon);
-  drawLeftBitmapText(textFonts, sidebarWeatherData_.outdoor.text, bounds.x + 74, bounds.y + 45);
+  drawLeftBitmapText(textFonts, sidebarWeatherData_.outdoor.text, bounds.x + 74, bounds.y + 54);
   drawLeftBitmapText(valueFonts, formatTemperatureValue(sidebarWeatherData_.outdoor.temp),
-                     bounds.x + 74, bounds.y + 75);
+                     bounds.x + 74, bounds.y + 81);
 
   const int16_t dividerX = bounds.x + bounds.width - 1;
   const int16_t dividerStartY = bounds.y + kMainPageSidebarPadding;
@@ -1235,7 +1235,7 @@ void DisplayModule::renderLogo() {
   const char* logoText = "ColaFeed";
   const String logoTextStr(logoText);
   const int16_t logoGraphicCenterY = centerY;
-  const int16_t logoTextCenterY = centerY + 110;
+  const int16_t logoTextCenterY = centerY + 90;
   const int16_t imageX = centerX - static_cast<int16_t>(LogoImage64x64::kWidth / 2);
   const int16_t imageY = logoGraphicCenterY - static_cast<int16_t>(LogoImage64x64::kHeight / 2);
   auto bitmapFonts = createFontCN32Renderer(display_);

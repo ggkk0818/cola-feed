@@ -174,11 +174,15 @@ String formatElapsedDuration(const String& currentServerTime, const String& endT
   const uint32_t elapsedHours = elapsedMinutes / 60UL;
   const uint32_t remainingMinutes = elapsedMinutes % 60UL;
 
+  char buffer[16] = {0};
   if (elapsedHours == 0) {
-    return String(elapsedMinutes) + "M";
+    snprintf(buffer, sizeof(buffer), "%02luM", static_cast<unsigned long>(elapsedMinutes));
+    return String(buffer);
   }
 
-  return String(elapsedHours) + "H " + String(remainingMinutes) + "M";
+  snprintf(buffer, sizeof(buffer), "%luH%02luM", static_cast<unsigned long>(elapsedHours),
+           static_cast<unsigned long>(remainingMinutes));
+  return String(buffer);
 }
 
 bool parsePayloadJson(const String& json, Payload* payload) {
