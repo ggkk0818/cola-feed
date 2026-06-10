@@ -51,6 +51,7 @@ class I2cModule {
 
   bool begin();
   void update();
+  void updateBatteryOnly();
 
   const AccelerationSample& getAccelerationSample() const;
   DeviceOrientation getDeviceOrientation() const;
@@ -58,13 +59,14 @@ class I2cModule {
   const BatterySample& getBatterySample() const;
   const SensorAvailability& getAvailability() const;
   uint32_t getNextUpdateDueMs(uint32_t nowMs) const;
+  uint32_t getNextBatteryUpdateDueMs(uint32_t nowMs) const;
 
   bool isBusInitialized() const;
   bool hasPendingActivityEvent() const;
   bool consumeActivityEvent();
 
  private:
-    static constexpr size_t kBatteryHistorySize = 4;
+  static constexpr size_t kBatteryHistorySize = 4;
 
   struct BatteryHistoryEntry {
     float percentage = NAN;

@@ -24,6 +24,7 @@ class BleGatewayClient {
   BleGatewayClient();
 
   bool begin();
+  void setEnabled(bool enabled, bool requestImmediately = false);
   void update();
   void handleNotification(const uint8_t* data, size_t length);
   uint32_t getNextWorkDueMs(uint32_t nowMs) const;
@@ -49,6 +50,7 @@ class BleGatewayClient {
   void resetResponseAssembly();
 
   bool moduleReady_ = false;
+  bool enabled_ = true;
   StatusSnapshot status_{};
   State state_ = State::kIdle;
   BLEScan* scan_ = nullptr;

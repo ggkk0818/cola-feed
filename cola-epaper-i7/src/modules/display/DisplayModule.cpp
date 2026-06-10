@@ -942,6 +942,11 @@ void DisplayModule::setMainPageContentData(const String& durationText, const Str
   }
 }
 
+void DisplayModule::invalidateMainPage() {
+  forceMainPageFullRefresh_ = true;
+  markAllMainPageRegionsDirty();
+}
+
 void DisplayModule::renderBatteryStatusIcon(int16_t x, int16_t y, uint8_t batteryPercentage) {
   const uint8_t segmentCount = resolveBatterySegmentCount(batteryPercentage);
   const int16_t headHeight = 10;

@@ -101,13 +101,46 @@ BleGatewayClient::BleGatewayClient() = default;
 
 bool BleGatewayClient::begin() {
   moduleReady_ = true;
+  enabled_ = true;
   status_.initialized = false;
   nextRequestDueMs_ = 0;
   return true;
 }
 
+void BleGatewayClient::setEnabled(bool enabled, bool requestImmediately) {
+  const uint32_t nowMs = millis();
+
+  if (enabled_ == enabled) {
+    if (enabled_ && requestImmediately) {
+      nextRequestDueMs_ = nowMs;
+    }
+    return;
+  }
+
+  enabled_ = enabled;
+  if (!enabled_) {
+    status_.requestInFlight = false;
+    status_.timedOut = false;
+    status_.requestStartedMs = 0;
+    gatewayAddress_.remove(0);
+    resetResponseAssembly();
+    hasPendingPayload_ = false;
+    lastScanAttemptMs_ = 0;
+    nextRequestDueMs_ = 0;
+    deinitializeBleStack();
+    state_ = State::kIdle;
+    return;
+  }
+
+  status_.requestInFlight = false;
+  status_.timedOut = false;
+  status_.requestStartedMs = 0;
+  state_ = State::kIdle;
+  nextRequestDueMs_ = requestImmediately ? nowMs : nowMs + kFeedPollIntervalMs;
+}
+
 void BleGatewayClient::update() {
-  if (!moduleReady_) {
+  if (!moduleReady_ || !enabled_) {
     return;
   }
 
@@ -164,6 +197,10 @@ const BleGatewayClient::StatusSnapshot& BleGatewayClient::getStatus() const { re
 uint32_t BleGatewayClient::getNextWorkDueMs(uint32_t nowMs) const {
   if (!moduleReady_) {
     return nowMs;
+  }
+
+  if (!enabled_) {
+    return 0xFFFFFFFFUL;
   }
 
   switch (state_) {

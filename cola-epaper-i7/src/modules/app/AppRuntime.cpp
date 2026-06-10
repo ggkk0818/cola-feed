@@ -17,6 +17,7 @@ constexpr uint32_t kDataTaskStackSize = 8192U;
 constexpr uint32_t kRenderTaskStackSize = 12288U;
 constexpr UBaseType_t kDataTaskPriority = 1;
 constexpr UBaseType_t kRenderTaskPriority = 2;
+constexpr float kLowBatteryThresholdPercentage = 2.0f;
 
 TickType_t toTicksAtLeastOne(uint32_t delayMs) {
   TickType_t ticks = pdMS_TO_TICKS(delayMs);
@@ -219,12 +220,19 @@ bool AppRuntime::begin() {
   i2cModule_.begin();
   bleGatewayClient_.begin();
   displayModule_.begin();
-  displayModule_.renderLogo();
+  lowBatteryMode_ = shouldEnterLowBatteryMode();
+  if (lowBatteryMode_) {
+    bleGatewayClient_.setEnabled(false);
+    displayModule_.renderLowBattery();
+  } else {
+    displayModule_.renderLogo();
+  }
 
   sharedStateMutex_ = xSemaphoreCreateMutex();
   if (sharedStateMutex_ == nullptr) {
     return false;
   }
+  sharedState_.displayIdle = true;
 
   configureWakeSources();
 
@@ -260,9 +268,32 @@ void AppRuntime::runDataTask() {
   bool hasPublishedState = false;
 
   for (;;) {
-    i2cModule_.update();
+    if (lowBatteryMode_) {
+      i2cModule_.updateBatteryOnly();
 
+      const uint32_t nowMs = millis();
+      if (shouldExitLowBatteryMode()) {
+        exitLowBatteryMode();
+        const AppDisplayState nextState =
+            AppDisplayUtils::buildDisplayState(i2cModule_, bleGatewayClient_, nowMs, nullptr);
+        lastPublishedState = nextState;
+        hasPublishedState = true;
+        publishDisplayState(nextState, true);
+        continue;
+      }
+
+      idleDataTaskUntil(nowMs, computeNextWakeDueMs(nowMs));
+      continue;
+    }
+
+    i2cModule_.update();
     uint32_t nowMs = millis();
+    if (shouldEnterLowBatteryMode()) {
+      enterLowBatteryMode();
+      hasPublishedState = false;
+      continue;
+    }
+
     AppDisplayState nextState =
         AppDisplayUtils::buildDisplayState(i2cModule_, bleGatewayClient_, nowMs,
                                            hasPublishedState ? &lastPublishedState : nullptr);
@@ -278,6 +309,12 @@ void AppRuntime::runDataTask() {
     bleGatewayClient_.update();
 
     nowMs = millis();
+    if (shouldEnterLowBatteryMode()) {
+      enterLowBatteryMode();
+      hasPublishedState = false;
+      continue;
+    }
+
     nextState = AppDisplayUtils::buildDisplayState(
         i2cModule_, bleGatewayClient_, nowMs,
         hasPublishedState ? &lastPublishedState : nullptr);
@@ -302,10 +339,21 @@ void AppRuntime::runRenderTask() {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
     AppDisplayState state;
-    if (!consumePendingDisplayState(&state)) {
+    bool forceMainPageRefresh = false;
+    const RenderCommand command = consumePendingRenderCommand(&state, &forceMainPageRefresh);
+    if (command == RenderCommand::kNone) {
       continue;
     }
 
+    if (command == RenderCommand::kLowBattery) {
+      displayModule_.renderLowBattery();
+      setDisplayIdle(true);
+      continue;
+    }
+
+    if (forceMainPageRefresh) {
+      displayModule_.invalidateMainPage();
+    }
     AppDisplayUtils::applyDisplayState(displayModule_, state);
     if (displayModule_.hasPendingMainPageRender()) {
       displayModule_.renderMainPage();
@@ -315,14 +363,15 @@ void AppRuntime::runRenderTask() {
   }
 }
 
-void AppRuntime::publishDisplayState(const AppDisplayState& state) {
+void AppRuntime::publishDisplayState(const AppDisplayState& state, bool forceMainPageRefresh) {
   if (sharedStateMutex_ == nullptr) {
     return;
   }
 
   xSemaphoreTake(sharedStateMutex_, portMAX_DELAY);
   sharedState_.pendingDisplayState = state;
-  sharedState_.renderRequested = true;
+  sharedState_.pendingRenderCommand = RenderCommand::kMainPage;
+  sharedState_.forceMainPageRefresh = forceMainPageRefresh;
   sharedState_.displayIdle = false;
   xSemaphoreGive(sharedStateMutex_);
 
@@ -331,21 +380,43 @@ void AppRuntime::publishDisplayState(const AppDisplayState& state) {
   }
 }
 
-bool AppRuntime::consumePendingDisplayState(AppDisplayState* state) {
-  if (sharedStateMutex_ == nullptr || state == nullptr) {
-    return false;
+void AppRuntime::publishLowBatteryRender() {
+  if (sharedStateMutex_ == nullptr) {
+    return;
   }
 
   xSemaphoreTake(sharedStateMutex_, portMAX_DELAY);
-  if (!sharedState_.renderRequested) {
-    xSemaphoreGive(sharedStateMutex_);
-    return false;
+  sharedState_.pendingRenderCommand = RenderCommand::kLowBattery;
+  sharedState_.forceMainPageRefresh = false;
+  sharedState_.displayIdle = false;
+  xSemaphoreGive(sharedStateMutex_);
+
+  if (renderTaskHandle_ != nullptr) {
+    xTaskNotifyGive(renderTaskHandle_);
+  }
+}
+
+AppRuntime::RenderCommand AppRuntime::consumePendingRenderCommand(AppDisplayState* state,
+                                                                  bool* forceMainPageRefresh) {
+  if (sharedStateMutex_ == nullptr || state == nullptr || forceMainPageRefresh == nullptr) {
+    return RenderCommand::kNone;
   }
 
-  *state = sharedState_.pendingDisplayState;
-  sharedState_.renderRequested = false;
+  xSemaphoreTake(sharedStateMutex_, portMAX_DELAY);
+  const RenderCommand command = sharedState_.pendingRenderCommand;
+  if (command == RenderCommand::kNone) {
+    xSemaphoreGive(sharedStateMutex_);
+    return RenderCommand::kNone;
+  }
+
+  if (command == RenderCommand::kMainPage) {
+    *state = sharedState_.pendingDisplayState;
+  }
+  *forceMainPageRefresh = sharedState_.forceMainPageRefresh;
+  sharedState_.pendingRenderCommand = RenderCommand::kNone;
+  sharedState_.forceMainPageRefresh = false;
   xSemaphoreGive(sharedStateMutex_);
-  return true;
+  return command;
 }
 
 void AppRuntime::setDisplayIdle(bool isIdle) {
@@ -364,12 +435,69 @@ void AppRuntime::readSharedState(bool* renderRequested, bool* displayIdle) {
   }
 
   xSemaphoreTake(sharedStateMutex_, portMAX_DELAY);
-  *renderRequested = sharedState_.renderRequested;
+  *renderRequested = sharedState_.pendingRenderCommand != RenderCommand::kNone;
   *displayIdle = sharedState_.displayIdle;
   xSemaphoreGive(sharedStateMutex_);
 }
 
+bool AppRuntime::isBatteryDetected() const {
+  const I2cModule::BatterySample& batterySample = i2cModule_.getBatterySample();
+  return i2cModule_.getAvailability().fuelGauge && batterySample.timestampMs != 0 &&
+         std::isfinite(batterySample.percentage);
+}
+
+bool AppRuntime::isBatteryChargingOrPowered() const {
+  const I2cModule::BatterySample& batterySample = i2cModule_.getBatterySample();
+  return batterySample.externalPowerLikely ||
+         batterySample.powerState == I2cModule::BatteryPowerState::kCharging ||
+         batterySample.powerState ==
+             I2cModule::BatteryPowerState::kChargeCompletePowerConnected;
+}
+
+bool AppRuntime::shouldEnterLowBatteryMode() const {
+  if (!isBatteryDetected()) {
+    return false;
+  }
+
+  const I2cModule::BatterySample& batterySample = i2cModule_.getBatterySample();
+  return batterySample.percentage < kLowBatteryThresholdPercentage &&
+         !isBatteryChargingOrPowered();
+}
+
+bool AppRuntime::shouldExitLowBatteryMode() const {
+  if (!isBatteryDetected()) {
+    return true;
+  }
+
+  const I2cModule::BatterySample& batterySample = i2cModule_.getBatterySample();
+  return isBatteryChargingOrPowered() ||
+         batterySample.percentage >= kLowBatteryThresholdPercentage;
+}
+
+void AppRuntime::enterLowBatteryMode() {
+  if (lowBatteryMode_) {
+    return;
+  }
+
+  lowBatteryMode_ = true;
+  bleGatewayClient_.setEnabled(false);
+  publishLowBatteryRender();
+}
+
+void AppRuntime::exitLowBatteryMode() {
+  if (!lowBatteryMode_) {
+    return;
+  }
+
+  lowBatteryMode_ = false;
+  bleGatewayClient_.setEnabled(true, true);
+}
+
 uint32_t AppRuntime::computeNextWakeDueMs(uint32_t nowMs) {
+  if (lowBatteryMode_) {
+    return i2cModule_.getNextBatteryUpdateDueMs(nowMs);
+  }
+
   const uint32_t sensorDueMs = i2cModule_.getNextUpdateDueMs(nowMs);
   const uint32_t bleDueMs = bleGatewayClient_.getNextWorkDueMs(nowMs);
   const uint32_t uiDueMs = AppDisplayUtils::getNextUiUpdateDueMs(bleGatewayClient_, nowMs);

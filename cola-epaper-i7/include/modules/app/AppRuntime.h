@@ -51,11 +51,18 @@ class AppRuntime {
   void loopForever();
 
  private:
+  enum class RenderCommand : uint8_t {
+    kNone,
+    kMainPage,
+    kLowBattery,
+  };
+
   // SharedState is the only cross-task handoff surface: the data task publishes
   // snapshots here and the render task consumes them.
   struct SharedState {
     AppDisplayState pendingDisplayState;
-    bool renderRequested = false;
+    RenderCommand pendingRenderCommand = RenderCommand::kNone;
+    bool forceMainPageRefresh = false;
     bool displayIdle = false;
   };
 
@@ -64,10 +71,17 @@ class AppRuntime {
 
   void runDataTask();
   void runRenderTask();
-  void publishDisplayState(const AppDisplayState& state);
-  bool consumePendingDisplayState(AppDisplayState* state);
+  void publishDisplayState(const AppDisplayState& state, bool forceMainPageRefresh = false);
+  void publishLowBatteryRender();
+  RenderCommand consumePendingRenderCommand(AppDisplayState* state, bool* forceMainPageRefresh);
   void setDisplayIdle(bool isIdle);
   void readSharedState(bool* renderRequested, bool* displayIdle);
+  bool isBatteryDetected() const;
+  bool isBatteryChargingOrPowered() const;
+  bool shouldEnterLowBatteryMode() const;
+  bool shouldExitLowBatteryMode() const;
+  void enterLowBatteryMode();
+  void exitLowBatteryMode();
   uint32_t computeNextWakeDueMs(uint32_t nowMs);
   // The low-priority data task uses timer wait or light sleep here once fetch and render work are idle.
   void idleDataTaskUntil(uint32_t nowMs, uint32_t nextWakeDueMs);
@@ -80,4 +94,5 @@ class AppRuntime {
   TaskHandle_t renderTaskHandle_ = nullptr;
   SemaphoreHandle_t sharedStateMutex_ = nullptr;
   SharedState sharedState_{};
+  bool lowBatteryMode_ = false;
 };

@@ -27,6 +27,7 @@ class DisplayModule {
                                size_t forecastDayCount);
   void setMainPageContentData(const String& durationText, const String& timestampText,
                               bool showTimestamp);
+  void invalidateMainPage();
   void renderLowBattery();
   void renderLogo();
   void hibernate();

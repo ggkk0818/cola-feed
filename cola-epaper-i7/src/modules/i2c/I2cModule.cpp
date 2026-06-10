@@ -159,6 +159,17 @@ void I2cModule::update() {
   }
 }
 
+void I2cModule::updateBatteryOnly() {
+  if (!busInitialized_ || !availability_.fuelGauge) {
+    return;
+  }
+
+  const uint32_t nowMs = millis();
+  if (batterySample_.timestampMs == 0 || (nowMs - lastBatteryPollMs_) >= kBatteryPollIntervalMs) {
+    updateBattery(nowMs);
+  }
+}
+
 const I2cModule::AccelerationSample& I2cModule::getAccelerationSample() const {
   return accelerationSample_;
 }
@@ -209,6 +220,14 @@ uint32_t I2cModule::getNextUpdateDueMs(uint32_t nowMs) const {
   }
 
   return hasAnySensor ? nextDueMs : nowMs;
+}
+
+uint32_t I2cModule::getNextBatteryUpdateDueMs(uint32_t nowMs) const {
+  if (!busInitialized_ || !availability_.fuelGauge || batterySample_.timestampMs == 0) {
+    return nowMs;
+  }
+
+  return lastBatteryPollMs_ + kBatteryPollIntervalMs;
 }
 
 bool I2cModule::isBusInitialized() const { return busInitialized_; }
