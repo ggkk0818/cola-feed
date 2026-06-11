@@ -42,7 +42,7 @@ constexpr uint8_t kMax17048Address = 0x36;
 constexpr uint8_t kMax17048RegVcell = 0x02;
 constexpr uint8_t kMax17048RegSoc = 0x04;
 
-constexpr uint32_t kAccelerationPollIntervalMs = 5000;
+constexpr uint32_t kAccelerationPollIntervalMs = 2000;
 constexpr uint32_t kEnvironmentPollIntervalMs = 60000;
 constexpr uint32_t kBatteryPollIntervalMs = 5000;
 constexpr uint32_t kShtc3MeasurementDelayMs = 15;
@@ -122,9 +122,9 @@ bool I2cModule::begin() {
   availability_.environment = initializeShtc3();
   availability_.fuelGauge = initializeMax17048();
 
-  if (availability_.accelerometer) {
-    attachInterrupt(digitalPinToInterrupt(kActivityInterruptPin), onAdxl343Interrupt, RISING);
-  }
+  // if (availability_.accelerometer) {
+  //   attachInterrupt(digitalPinToInterrupt(kActivityInterruptPin), onAdxl343Interrupt, RISING);
+  // }
 
   update();
   return availability_.accelerometer || availability_.environment || availability_.fuelGauge;
