@@ -28,7 +28,7 @@ constexpr uint8_t kAdxl343MeasureMode = 0x08;
 constexpr uint8_t kAdxl343FullResolutionRange2G = 0x08;
 constexpr uint8_t kAdxl343Rate100Hz = 0x0A;
 constexpr uint8_t kAdxl343ActivityThresholdCounts = 8;
-constexpr uint8_t kAdxl343ActivityAxesDcCoupled = 0x70;
+constexpr uint8_t kAdxl343ActivityAxesDcCoupled = 0xF0;
 constexpr uint8_t kAdxl343ActivityInterruptMask = 0x10;
 constexpr float kAdxl343ScaleFactorG = 0.0039f;
 
