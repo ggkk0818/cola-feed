@@ -48,14 +48,18 @@ constexpr uint32_t kBatteryPollIntervalMs = 5000;
 constexpr uint32_t kShtc3MeasurementDelayMs = 15;
 constexpr float kOrientationMinAxisMagnitudeG = 0.65f;
 constexpr float kMax17048VoltageResolutionV = 0.000078125f;
-constexpr uint32_t kBatteryTrendWindowMaxMs = 40000;
+constexpr uint32_t kBatteryTrendWindowMaxMs = 150000;
 constexpr float kChargeCompleteVoltageThresholdV = 4.12f;
 constexpr float kChargeCompletePercentageThreshold = 99.0f;
-constexpr float kBatteryTrendVoltageRiseThresholdV = 0.012f;
-constexpr float kBatteryTrendVoltageDropThresholdV = -0.015f;
-constexpr float kBatteryWakePercentageDeltaThreshold = 0.2f;
-constexpr float kBatteryWakeVoltageDropThresholdV = -0.05f;
-constexpr float kNearFullDischargingVoltageDropThresholdV = -0.03f;
+constexpr float kBatteryTrendPercentageChargeThreshold = 0.03f;
+constexpr float kBatteryTrendPercentageDischargeThreshold = -0.08f;
+constexpr float kBatteryTrendVoltageRiseThresholdV = 0.004f;
+constexpr float kBatteryTrendVoltageDropThresholdV = -0.035f;
+constexpr float kBatteryChargeHoldVoltageDropThresholdV = -0.025f;
+constexpr float kBatteryWakeChargePercentageDeltaThreshold = 0.05f;
+constexpr float kBatteryWakeDischargePercentageDeltaThreshold = -0.25f;
+constexpr float kBatteryWakeVoltageDropThresholdV = -0.08f;
+constexpr float kNearFullDischargingVoltageDropThresholdV = -0.045f;
 constexpr float kOrientationDominanceMarginG = 0.15f;
 
 volatile bool gAdxl343InterruptRaised = false;
@@ -545,6 +549,23 @@ float I2cModule::computeBatteryPercentageRatePerHour() const {
   return (newest.percentage - oldest.percentage) / elapsedHours;
 }
 
+float I2cModule::computeBatteryPercentageDelta() const {
+  if (!hasBatteryTrendWindow()) {
+    return NAN;
+  }
+
+  const size_t oldestIndex = batteryHistoryNextIndex_;
+  const size_t newestIndex =
+      (batteryHistoryNextIndex_ + kBatteryHistorySize - 1u) % kBatteryHistorySize;
+  const BatteryHistoryEntry& oldest = batteryHistory_[oldestIndex];
+  const BatteryHistoryEntry& newest = batteryHistory_[newestIndex];
+  if (!isFiniteFloat(oldest.percentage) || !isFiniteFloat(newest.percentage)) {
+    return NAN;
+  }
+
+  return newest.percentage - oldest.percentage;
+}
+
 float I2cModule::computeBatteryVoltageDelta() const {
   if (!hasBatteryTrendWindow()) {
     return NAN;
@@ -598,17 +619,30 @@ I2cModule::BatteryPowerState I2cModule::inferBatteryPowerStateAfterWake(float pe
 
   if (isFiniteFloat(batteryWakeBaseline_.percentage)) {
     const float percentageDelta = percentage - batteryWakeBaseline_.percentage;
-    if (percentageDelta >= kBatteryWakePercentageDeltaThreshold) {
+    if (percentageDelta >= kBatteryWakeChargePercentageDeltaThreshold) {
       return BatteryPowerState::kCharging;
     }
-    if (percentageDelta <= -kBatteryWakePercentageDeltaThreshold) {
+    if (percentageDelta <= kBatteryWakeDischargePercentageDeltaThreshold) {
       return BatteryPowerState::kDischarging;
     }
   }
 
   if (isFiniteFloat(batteryWakeBaseline_.voltageV) &&
+      (voltageV - batteryWakeBaseline_.voltageV) >= kBatteryTrendVoltageRiseThresholdV) {
+    return BatteryPowerState::kCharging;
+  }
+
+  if (isFiniteFloat(batteryWakeBaseline_.voltageV) &&
       (voltageV - batteryWakeBaseline_.voltageV) <= kBatteryWakeVoltageDropThresholdV) {
     return BatteryPowerState::kDischarging;
+  }
+
+  const bool wasPowered = batterySample_.powerState == BatteryPowerState::kCharging ||
+                          batterySample_.powerState ==
+                              BatteryPowerState::kChargeCompletePowerConnected ||
+                          batterySample_.externalPowerLikely;
+  if (wasPowered) {
+    return BatteryPowerState::kCharging;
   }
 
   if (hasBatteryTrendWindow()) {
@@ -626,31 +660,57 @@ I2cModule::BatteryPowerState I2cModule::inferBatteryPowerState(
 
   const bool nearFull = percentage >= kChargeCompletePercentageThreshold &&
                         voltageV >= kChargeCompleteVoltageThresholdV;
+  const bool hasTrend = hasBatteryTrendWindow();
+  const float percentageDelta = computeBatteryPercentageDelta();
+  const float voltageDeltaV = computeBatteryVoltageDelta();
+  const bool socDischargeEvidence =
+      hasTrend && isFiniteFloat(percentageDelta) &&
+      percentageDelta <= kBatteryTrendPercentageDischargeThreshold;
+  const bool voltageDischargeEvidence =
+      hasTrend && isFiniteFloat(voltageDeltaV) &&
+      voltageDeltaV <= kBatteryTrendVoltageDropThresholdV && percentageRatePerHour <= 0.0f;
+  const bool dischargeEvidence = socDischargeEvidence || voltageDischargeEvidence;
+  const bool wasPowered = batterySample_.powerState == BatteryPowerState::kCharging ||
+                          batterySample_.powerState ==
+                              BatteryPowerState::kChargeCompletePowerConnected ||
+                          batterySample_.externalPowerLikely;
 
   if (nearFull) {
-    const float voltageDeltaV = computeBatteryVoltageDelta();
-    if (hasBatteryTrendWindow() && isFiniteFloat(voltageDeltaV) &&
-        voltageDeltaV <= kNearFullDischargingVoltageDropThresholdV) {
+    if (socDischargeEvidence ||
+        (hasTrend && isFiniteFloat(voltageDeltaV) &&
+         voltageDeltaV <= kNearFullDischargingVoltageDropThresholdV &&
+         percentageRatePerHour <= 0.0f)) {
       return BatteryPowerState::kDischarging;
     }
 
     return BatteryPowerState::kChargeCompletePowerConnected;
   }
 
-  if (!hasBatteryTrendWindow()) {
+  if (!hasTrend) {
+    if (wasPowered) {
+      return BatteryPowerState::kCharging;
+    }
     return BatteryPowerState::kUnknown;
   }
 
-  const float voltageDeltaV = computeBatteryVoltageDelta();
+  if (dischargeEvidence) {
+    return BatteryPowerState::kDischarging;
+  }
 
-  if (isFiniteFloat(voltageDeltaV) && voltageDeltaV >= kBatteryTrendVoltageRiseThresholdV &&
-      percentageRatePerHour >= 0.0f) {
+  const bool socChargeEvidence = isFiniteFloat(percentageDelta) &&
+                                 percentageDelta >= kBatteryTrendPercentageChargeThreshold &&
+                                 isFiniteFloat(voltageDeltaV) &&
+                                 voltageDeltaV > kBatteryChargeHoldVoltageDropThresholdV;
+  const bool voltageChargeEvidence =
+      isFiniteFloat(voltageDeltaV) && voltageDeltaV >= kBatteryTrendVoltageRiseThresholdV &&
+      percentageRatePerHour >= 0.0f;
+  if (socChargeEvidence || voltageChargeEvidence) {
     return BatteryPowerState::kCharging;
   }
 
-  if (isFiniteFloat(voltageDeltaV) && voltageDeltaV <= kBatteryTrendVoltageDropThresholdV &&
-      percentageRatePerHour <= 0.0f) {
-    return BatteryPowerState::kDischarging;
+  if (wasPowered && isFiniteFloat(voltageDeltaV) &&
+      voltageDeltaV > kBatteryChargeHoldVoltageDropThresholdV) {
+    return BatteryPowerState::kCharging;
   }
 
   return BatteryPowerState::kUnknown;

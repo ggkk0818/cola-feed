@@ -66,7 +66,7 @@ class I2cModule {
   bool consumeActivityEvent();
 
  private:
-  static constexpr size_t kBatteryHistorySize = 4;
+  static constexpr size_t kBatteryHistorySize = 25;
 
   struct BatteryHistoryEntry {
     float percentage = NAN;
@@ -97,6 +97,7 @@ class I2cModule {
   void resetBatteryHistory();
   void recordBatteryHistory(float percentage, float voltageV, uint32_t timestampMs);
   float computeBatteryPercentageRatePerHour() const;
+  float computeBatteryPercentageDelta() const;
   float computeBatteryVoltageDelta() const;
   bool hasBatteryTrendWindow() const;
   bool shouldResetBatteryHistory(uint32_t timestampMs) const;
