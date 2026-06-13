@@ -197,10 +197,11 @@ class ClientService {
     const now = new Date();
     const nowMs = now.getTime();
     const nowString = formatDateTime(now);
+    const records = this.feedService.getRecords() || [];
     const weatherData = this.weatherService ? this.weatherService.getWeatherData() : null;
     const feedPayload = {
       serverTime: nowString,
-      records: this.feedService.getRecords(),
+      records: records.length > 6 ? records.slice(-6) : records,
       weatherData,
     };
 
