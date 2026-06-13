@@ -92,6 +92,7 @@ constexpr int16_t kMainPageSidebarDashLength = 4;
 constexpr int16_t kMainPageSidebarDashGap = 4;
 constexpr int16_t kMainPageContentTextEdgeOffset = 12;
 constexpr int16_t kMainPageTopPartialPadding = 6;
+constexpr uint32_t kPostFullRefreshDelayMs = 50;
 constexpr int16_t kBatteryStatusIconWidth = 44;
 constexpr int16_t kBatteryStatusIconHeight = 24;
 constexpr int16_t kBatteryStatusHeadWidth = 5;
@@ -324,6 +325,10 @@ void drawVerticalDashedLine(DisplayDriver& display, int16_t x, int16_t startY, i
 
     display.drawLine(x, y, x, dashEndY, GxEPD_BLACK);
   }
+}
+
+void delayAfterFullRefresh() {
+  delay(kPostFullRefreshDelayMs);
 }
 
 String formatTemperatureValue(const String& temp) {
@@ -679,6 +684,8 @@ void DisplayModule::renderMainPageFullRefresh() {
     renderMainPageRegion(MainPageRegion::kContent);
     renderMainPageLayout();
   } while (display_.nextPage());
+
+  delayAfterFullRefresh();
 }
 
 void DisplayModule::renderMainPagePartialRefresh(MainPageRegion region) {
@@ -1232,7 +1239,6 @@ void DisplayModule::renderLowBattery() {
                         BatteryImage128x128::kWidth, BatteryImage128x128::kHeight,
                         GxEPD_BLACK);
   } while (display_.nextPage());
-
   hibernate();
 }
 
@@ -1260,7 +1266,6 @@ void DisplayModule::renderLogo() {
 
     drawCenterBitmapText(bitmapFonts, logoTextStr, centerX, logoTextCenterY);
   } while (display_.nextPage());
-
   hibernate();
 }
 
