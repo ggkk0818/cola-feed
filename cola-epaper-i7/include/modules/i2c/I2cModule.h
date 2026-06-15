@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <SHTC3.h>
 
 class I2cModule {
  public:
@@ -120,4 +121,5 @@ class I2cModule {
   uint32_t lastAccelerationPollMs_ = 0;
   uint32_t lastEnvironmentPollMs_ = 0;
   uint32_t lastBatteryPollMs_ = 0;
+  SHTC3 shtc3_{Wire};
 };

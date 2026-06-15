@@ -1,6 +1,7 @@
 #include "modules/i2c/I2cModule.h"
 
 #include <Wire.h>
+#include <SHTC3.h>
 
 #include <cmath>
 
@@ -271,13 +272,7 @@ bool I2cModule::initializeAdxl343() {
 }
 
 bool I2cModule::initializeShtc3() {
-  if (!writeCommand(kShtc3Address, kShtc3SoftResetCommand)) {
-    return false;
-  }
-
-  sleepWithScheduler(1);
-  writeCommand(kShtc3Address, kShtc3SleepCommand);
-  return true;
+  return shtc3_.begin(false);
 }
 
 bool I2cModule::initializeMax17048() {
@@ -422,35 +417,12 @@ I2cModule::DeviceOrientation I2cModule::inferDeviceOrientation(
 }
 
 bool I2cModule::readShtc3Environment(EnvironmentSample& sample, uint32_t nowMs) {
-  if (!writeCommand(kShtc3Address, kShtc3WakeupCommand)) {
+  if (!shtc3_.sample()) {
     return false;
   }
 
-  sleepWithScheduler(1);
-
-  if (!writeCommand(kShtc3Address, kShtc3MeasureNormalTFirstCommand)) {
-    writeCommand(kShtc3Address, kShtc3SleepCommand);
-    return false;
-  }
-
-  sleepWithScheduler(kShtc3MeasurementDelayMs);
-
-  uint8_t bytes[6] = {0};
-  const bool readOk = readBytes(kShtc3Address, bytes, sizeof(bytes));
-  writeCommand(kShtc3Address, kShtc3SleepCommand);
-  if (!readOk) {
-    return false;
-  }
-
-  if (calculateShtc3Crc(bytes, 2) != bytes[2] || calculateShtc3Crc(bytes + 3, 2) != bytes[5]) {
-    return false;
-  }
-
-  const uint16_t rawTemperature = static_cast<uint16_t>((bytes[0] << 8) | bytes[1]);
-  const uint16_t rawHumidity = static_cast<uint16_t>((bytes[3] << 8) | bytes[4]);
-
-  sample.temperatureC = -45.0f + (175.0f * static_cast<float>(rawTemperature) / 65535.0f);
-  sample.humidityPercent = 100.0f * static_cast<float>(rawHumidity) / 65535.0f;
+  sample.temperatureC = shtc3_.readTempC();
+  sample.humidityPercent = shtc3_.readHumidity();
   sample.timestampMs = nowMs;
   return true;
 }
