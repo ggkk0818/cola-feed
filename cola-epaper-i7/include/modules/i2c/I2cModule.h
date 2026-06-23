@@ -97,14 +97,12 @@ class I2cModule {
 
   void resetBatteryHistory();
   void recordBatteryHistory(float percentage, float voltageV, uint32_t timestampMs);
+  bool getBatteryTrendWindowBounds(size_t* oldestIdx, size_t* newestIdx) const;
   float computeBatteryPercentageRatePerHour() const;
-  float computeBatteryPercentageDelta() const;
-  float computeBatteryVoltageDelta() const;
   bool hasBatteryTrendWindow() const;
   bool shouldResetBatteryHistory(uint32_t timestampMs) const;
-  BatteryPowerState inferBatteryPowerStateAfterWake(float percentage, float voltageV) const;
-  BatteryPowerState inferBatteryPowerState(float percentage, float voltageV,
-                                           float percentageRatePerHour) const;
+  BatteryPowerState inferBatteryPowerState(float percentage, float percentageRatePerHour) const;
+  BatteryPowerState debouncePowerState(BatteryPowerState rawState);
 
   bool busInitialized_ = false;
   bool activityEventLatched_ = false;
@@ -114,10 +112,11 @@ class I2cModule {
   EnvironmentSample environmentSample_{};
   BatterySample batterySample_{};
   BatteryHistoryEntry batteryHistory_[kBatteryHistorySize]{};
-  BatteryHistoryEntry batteryWakeBaseline_{};
   size_t batteryHistoryCount_ = 0;
   size_t batteryHistoryNextIndex_ = 0;
-  bool batteryWakeRecoveryActive_ = false;
+  BatteryPowerState lastRawPowerState_ = BatteryPowerState::kUnknown;
+  uint8_t rawPowerStateRepeatCount_ = 0;
+  BatteryPowerState debouncedPowerState_ = BatteryPowerState::kUnknown;
   uint32_t lastAccelerationPollMs_ = 0;
   uint32_t lastEnvironmentPollMs_ = 0;
   uint32_t lastBatteryPollMs_ = 0;
