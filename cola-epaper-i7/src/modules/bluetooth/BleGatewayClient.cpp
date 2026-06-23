@@ -20,7 +20,7 @@ constexpr const char* kFeedDataCharacteristicUuid = "4e6a1001-5c4f-45af-8f1f-c41
 constexpr const char* kBroadcastCharacteristicUuid = "4e6a1002-5c4f-45af-8f1f-c41c01ab1002";
 constexpr const char* kFeedChunkPrefix = "CF1|";
 
-constexpr uint32_t kFeedPollIntervalMs = 60000UL;
+constexpr uint32_t kFeedPollIntervalMs = 30000UL;
 constexpr uint32_t kRequestTimeoutMs = 10000UL;
 constexpr uint32_t kScanStepIntervalMs = 1000UL;
 

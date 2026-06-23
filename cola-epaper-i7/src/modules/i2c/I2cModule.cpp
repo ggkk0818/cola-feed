@@ -54,14 +54,24 @@ constexpr float kChargeCompleteVoltageThresholdV = 4.12f;
 constexpr float kChargeCompletePercentageThreshold = 99.0f;
 constexpr float kBatteryTrendPercentageChargeThreshold = 0.03f;
 constexpr float kBatteryTrendPercentageDischargeThreshold = -0.08f;
-constexpr float kSocRateChargeThreshold = 6.0f;
+// 5V/400mA 输入在 5000mAh 上峰值约 9-10 %/h（CC 阶段），但 80%+ SOC 进入
+// CV 阶段后电流回落到 1-4 %/h。1.5 %/h 检测下限对应 ~75mA 充电电流，能覆盖
+// 整个 CV 阶段；同时高于 120s 窗口内任何持续放电场景（电机短脉冲平均 <1 %/h）
+// 与 SOC 量化噪声（~0.12 %/h）。
+constexpr float kSocRateChargeThreshold = 1.5f;
 constexpr float kSocRateDischargeThreshold = -0.5f;
 constexpr float kSocChargeCompleteThreshold = 99.0f;
+// 充满判定要求 SOC 速率基本平稳或上行。5000mAh 典型空闲放电 0.4-0.6 %/h，
+// -0.1 %/h 阈值确保任何超过 SOC 量化噪声（120s 窗口 ~0.12 %/h）的下行
+// 都不会被误判为"仍在外接电源"；阈值与放电阈值解耦，避免影响主放电判断。
+constexpr float kSocRateChargeCompleteStableThreshold = -0.1f;
 constexpr float kBatteryTrendVoltageRiseThresholdV = 0.004f;
 constexpr float kBatteryTrendVoltageDropThresholdV = -0.035f;
 constexpr float kBatteryChargeHoldVoltageDropThresholdV = -0.025f;
 constexpr float kBatteryWakeChargePercentageDeltaThreshold = 0.05f;
-constexpr float kBatteryWakeDischargePercentageDeltaThreshold = -0.25f;
+// 5000mAh 上 120s 异常间隔 + 25mA 活动负载约 -0.17% 压降。-0.1% 阈值
+// 高于 MAX17048 relaxation 噪声（~0.05%），低于任何真实活动放电。
+constexpr float kBatteryWakeDischargePercentageDeltaThreshold = -0.1f;
 constexpr float kBatteryWakeVoltageDropThresholdV = -0.08f;
 constexpr float kNearFullDischargingVoltageDropThresholdV = -0.045f;
 constexpr float kOrientationDominanceMarginG = 0.15f;
@@ -625,18 +635,19 @@ I2cModule::BatteryPowerState I2cModule::inferBatteryPowerState(
   const bool nearFull = percentage >= kSocChargeCompleteThreshold;
   const bool hasTrend = hasBatteryTrendWindow();
 
-  // 检查充满状态
-  if (nearFull && percentageRatePerHour >= kSocRateDischargeThreshold) {
+  // 明确充电中（rate 超过充电阈值）优先返回 kCharging，即使 SOC 已达 99%+。
+  // 否则 CV 阶段的高速充电会被 nearFull 短路成"充满/外接电源"，丢失充电图标。
+  if (hasTrend && percentageRatePerHour > kSocRateChargeThreshold) {
+    return BatteryPowerState::kCharging;
+  }
+
+  // 充满且未观察到下行 -> 视为仍连接电源
+  if (nearFull && percentageRatePerHour >= kSocRateChargeCompleteStableThreshold) {
     return BatteryPowerState::kChargeCompletePowerConnected;
   }
 
   if (!hasTrend) {
     return BatteryPowerState::kUnknown;
-  }
-
-  // 基于SOC变化率判断充电状态
-  if (percentageRatePerHour > kSocRateChargeThreshold) {
-    return BatteryPowerState::kCharging;
   }
 
   if (percentageRatePerHour < kSocRateDischargeThreshold) {
