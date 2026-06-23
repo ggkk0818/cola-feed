@@ -54,6 +54,9 @@ constexpr float kChargeCompleteVoltageThresholdV = 4.12f;
 constexpr float kChargeCompletePercentageThreshold = 99.0f;
 constexpr float kBatteryTrendPercentageChargeThreshold = 0.03f;
 constexpr float kBatteryTrendPercentageDischargeThreshold = -0.08f;
+constexpr float kSocRateChargeThreshold = 6.0f;
+constexpr float kSocRateDischargeThreshold = -0.5f;
+constexpr float kSocChargeCompleteThreshold = 99.0f;
 constexpr float kBatteryTrendVoltageRiseThresholdV = 0.004f;
 constexpr float kBatteryTrendVoltageDropThresholdV = -0.035f;
 constexpr float kBatteryChargeHoldVoltageDropThresholdV = -0.025f;
@@ -579,12 +582,11 @@ bool I2cModule::shouldResetBatteryHistory(uint32_t timestampMs) const {
 
 I2cModule::BatteryPowerState I2cModule::inferBatteryPowerStateAfterWake(float percentage,
                                                                         float voltageV) const {
-  if (!isFiniteFloat(percentage) || !isFiniteFloat(voltageV)) {
+  if (!isFiniteFloat(percentage)) {
     return BatteryPowerState::kUnknown;
   }
 
-  const bool nearFull = percentage >= kChargeCompletePercentageThreshold &&
-                        voltageV >= kChargeCompleteVoltageThresholdV;
+  const bool nearFull = percentage >= kSocChargeCompleteThreshold;
   if (nearFull) {
     return BatteryPowerState::kChargeCompletePowerConnected;
   }
@@ -597,16 +599,6 @@ I2cModule::BatteryPowerState I2cModule::inferBatteryPowerStateAfterWake(float pe
     if (percentageDelta <= kBatteryWakeDischargePercentageDeltaThreshold) {
       return BatteryPowerState::kDischarging;
     }
-  }
-
-  if (isFiniteFloat(batteryWakeBaseline_.voltageV) &&
-      (voltageV - batteryWakeBaseline_.voltageV) >= kBatteryTrendVoltageRiseThresholdV) {
-    return BatteryPowerState::kCharging;
-  }
-
-  if (isFiniteFloat(batteryWakeBaseline_.voltageV) &&
-      (voltageV - batteryWakeBaseline_.voltageV) <= kBatteryWakeVoltageDropThresholdV) {
-    return BatteryPowerState::kDischarging;
   }
 
   const bool wasPowered = batterySample_.powerState == BatteryPowerState::kCharging ||
@@ -626,63 +618,29 @@ I2cModule::BatteryPowerState I2cModule::inferBatteryPowerStateAfterWake(float pe
 
 I2cModule::BatteryPowerState I2cModule::inferBatteryPowerState(
     float percentage, float voltageV, float percentageRatePerHour) const {
-  if (!isFiniteFloat(percentage) || !isFiniteFloat(voltageV)) {
+  if (!isFiniteFloat(percentage)) {
     return BatteryPowerState::kUnknown;
   }
 
-  const bool nearFull = percentage >= kChargeCompletePercentageThreshold &&
-                        voltageV >= kChargeCompleteVoltageThresholdV;
+  const bool nearFull = percentage >= kSocChargeCompleteThreshold;
   const bool hasTrend = hasBatteryTrendWindow();
-  const float percentageDelta = computeBatteryPercentageDelta();
-  const float voltageDeltaV = computeBatteryVoltageDelta();
-  const bool socDischargeEvidence =
-      hasTrend && isFiniteFloat(percentageDelta) &&
-      percentageDelta <= kBatteryTrendPercentageDischargeThreshold;
-  const bool voltageDischargeEvidence =
-      hasTrend && isFiniteFloat(voltageDeltaV) &&
-      voltageDeltaV <= kBatteryTrendVoltageDropThresholdV && percentageRatePerHour <= 0.0f;
-  const bool dischargeEvidence = socDischargeEvidence || voltageDischargeEvidence;
-  const bool wasPowered = batterySample_.powerState == BatteryPowerState::kCharging ||
-                          batterySample_.powerState ==
-                              BatteryPowerState::kChargeCompletePowerConnected ||
-                          batterySample_.externalPowerLikely;
 
-  if (nearFull) {
-    if (socDischargeEvidence ||
-        (hasTrend && isFiniteFloat(voltageDeltaV) &&
-         voltageDeltaV <= kNearFullDischargingVoltageDropThresholdV &&
-         percentageRatePerHour <= 0.0f)) {
-      return BatteryPowerState::kDischarging;
-    }
-
+  // 检查充满状态
+  if (nearFull && percentageRatePerHour >= kSocRateDischargeThreshold) {
     return BatteryPowerState::kChargeCompletePowerConnected;
   }
 
   if (!hasTrend) {
-    if (wasPowered) {
-      return BatteryPowerState::kCharging;
-    }
     return BatteryPowerState::kUnknown;
   }
 
-  if (dischargeEvidence) {
+  // 基于SOC变化率判断充电状态
+  if (percentageRatePerHour > kSocRateChargeThreshold) {
+    return BatteryPowerState::kCharging;
+  }
+
+  if (percentageRatePerHour < kSocRateDischargeThreshold) {
     return BatteryPowerState::kDischarging;
-  }
-
-  const bool socChargeEvidence = isFiniteFloat(percentageDelta) &&
-                                 percentageDelta >= kBatteryTrendPercentageChargeThreshold &&
-                                 isFiniteFloat(voltageDeltaV) &&
-                                 voltageDeltaV > kBatteryChargeHoldVoltageDropThresholdV;
-  const bool voltageChargeEvidence =
-      isFiniteFloat(voltageDeltaV) && voltageDeltaV >= kBatteryTrendVoltageRiseThresholdV &&
-      percentageRatePerHour >= 0.0f;
-  if (socChargeEvidence || voltageChargeEvidence) {
-    return BatteryPowerState::kCharging;
-  }
-
-  if (wasPowered && isFiniteFloat(voltageDeltaV) &&
-      voltageDeltaV > kBatteryChargeHoldVoltageDropThresholdV) {
-    return BatteryPowerState::kCharging;
   }
 
   return BatteryPowerState::kUnknown;
