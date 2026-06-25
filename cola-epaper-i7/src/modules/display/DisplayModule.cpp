@@ -749,6 +749,7 @@ bool DisplayModule::hasDirtyMainPageFullRefreshOnlyRegion() const {
   const MainPageRegion regions[] = {
       MainPageRegion::kSidebarOutdoor,
       MainPageRegion::kSidebarForecast,
+      MainPageRegion::kContent,
   };
 
   for (MainPageRegion region : regions) {
