@@ -176,7 +176,7 @@ String formatElapsedDuration(const String& currentServerTime, const String& endT
 
   char buffer[16] = {0};
   if (elapsedHours == 0) {
-    snprintf(buffer, sizeof(buffer), "%02luM", static_cast<unsigned long>(elapsedMinutes));
+    snprintf(buffer, sizeof(buffer), "%luM", static_cast<unsigned long>(elapsedMinutes));
     return String(buffer);
   }
 
