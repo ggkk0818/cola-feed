@@ -86,7 +86,7 @@ constexpr int16_t kMainPageSidebarTopSectionHeight = 120;
 constexpr int16_t kMainPageSidebarPanelWidth = kMainPageSidebarWidth / 2;
 constexpr int16_t kMainPageBorderThickness = 2;
 constexpr int16_t kMainPageTopTimeAreaWidth = 300;
-constexpr uint8_t kMainPageMaxConsecutivePartialRefreshes = 8;
+constexpr uint8_t kMainPageMaxConsecutivePartialRefreshes = 10;
 constexpr int16_t kMainPageSidebarPadding = 5;
 constexpr int16_t kMainPageSidebarDashLength = 4;
 constexpr int16_t kMainPageSidebarDashGap = 4;
@@ -325,10 +325,6 @@ void drawVerticalDashedLine(DisplayDriver& display, int16_t x, int16_t startY, i
 
     display.drawLine(x, y, x, dashEndY, GxEPD_BLACK);
   }
-}
-
-void delayAfterFullRefresh() {
-  delay(kPostFullRefreshDelayMs);
 }
 
 String formatTemperatureValue(const String& temp) {
@@ -685,8 +681,6 @@ void DisplayModule::renderMainPageFullRefresh() {
     renderMainPageRegion(MainPageRegion::kContent);
     renderMainPageLayout();
   } while (display_.nextPage());
-
-  delayAfterFullRefresh();
 }
 
 void DisplayModule::renderMainPagePartialRefresh(MainPageRegion region) {
@@ -754,6 +748,13 @@ void DisplayModule::primePartialRefreshStateAfterFullRefresh() {
   do {
     renderMainPageSidebarIndoorRegion(indoorBounds);
   } while (display_.nextPageBW());
+
+  const MainPageRegionBounds contentBounds = getMainPageContentBounds();
+  display_.setPartialWindow(contentBounds.x, contentBounds.y, contentBounds.width, contentBounds.height);
+  display_.firstPage();
+  do {
+    renderMainPageContentRegion(contentBounds);
+  } while (display_.nextPageBW());
 }
 
 void DisplayModule::renderMainPageTopPartialWindow(const MainPageRegionBounds& bounds,
@@ -776,7 +777,6 @@ bool DisplayModule::hasDirtyMainPageFullRefreshOnlyRegion() const {
   const MainPageRegion regions[] = {
       MainPageRegion::kSidebarOutdoor,
       MainPageRegion::kSidebarForecast,
-      MainPageRegion::kContent,
   };
 
   for (MainPageRegion region : regions) {
@@ -1298,5 +1298,5 @@ void DisplayModule::renderLogo() {
 }
 
 void DisplayModule::hibernate() {
-  display_.hibernate();
+  display_.powerOff();
 }
