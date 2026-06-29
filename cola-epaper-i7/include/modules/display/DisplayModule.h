@@ -90,6 +90,7 @@ class DisplayModule {
 
   void renderMainPageFullRefresh();
   void renderMainPagePartialRefresh(MainPageRegion region);
+  void primePartialRefreshStateAfterFullRefresh();
   void clearMainPagePartialWindow(const MainPageRegionBounds& bounds);
   void renderMainPageTopPartialWindow(const MainPageRegionBounds& bounds, bool renderTime,
                                       bool renderBatteryStatus);

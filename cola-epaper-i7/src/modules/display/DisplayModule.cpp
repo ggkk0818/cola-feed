@@ -86,7 +86,7 @@ constexpr int16_t kMainPageSidebarTopSectionHeight = 120;
 constexpr int16_t kMainPageSidebarPanelWidth = kMainPageSidebarWidth / 2;
 constexpr int16_t kMainPageBorderThickness = 2;
 constexpr int16_t kMainPageTopTimeAreaWidth = 300;
-constexpr uint8_t kMainPageMaxConsecutivePartialRefreshes = 5;
+constexpr uint8_t kMainPageMaxConsecutivePartialRefreshes = 8;
 constexpr int16_t kMainPageSidebarPadding = 5;
 constexpr int16_t kMainPageSidebarDashLength = 4;
 constexpr int16_t kMainPageSidebarDashGap = 4;
@@ -418,6 +418,7 @@ void DisplayModule::renderMainPage() {
     forceMainPageFullRefresh_ = false;
     resetMainPageRegionStateAfterFullRefresh();
     hasRenderedMainPage_ = true;
+    primePartialRefreshStateAfterFullRefresh();
     hibernate();
     return;
   }
@@ -726,6 +727,32 @@ void DisplayModule::clearMainPagePartialWindow(const MainPageRegionBounds& bound
   display_.firstPage();
   do {
     display_.fillRect(bounds.x, bounds.y, bounds.width, bounds.height, GxEPD_WHITE);
+  } while (display_.nextPageBW());
+}
+
+void DisplayModule::primePartialRefreshStateAfterFullRefresh() {
+  // After a color full refresh, the controller's differential state used by
+  // refresh_bw does not match the visible BW content (register 0x13 still
+  // holds the color buffer). The first BW partial refresh would then compute
+  // an incorrect differential waveform and fail to clear the previously drawn
+  // content (e.g., mainPageTopTime_ artifacts after a full refresh).
+  //
+  // Run a no-op BW partial refresh over each BW-partial region with its current
+  // content so the controller's "previous" state syncs with the visible pixels.
+  // The differential is benign (same content driven), so this is invisible.
+  const MainPageRegionBounds topBounds = getMainPageTopBounds();
+  display_.setPartialWindow(topBounds.x, topBounds.y, topBounds.width, topBounds.height);
+  display_.firstPage();
+  do {
+    renderMainPageTopRegion(topBounds);
+  } while (display_.nextPageBW());
+
+  const MainPageRegionBounds indoorBounds = getMainPageSidebarIndoorBounds();
+  display_.setPartialWindow(indoorBounds.x, indoorBounds.y, indoorBounds.width,
+                            indoorBounds.height);
+  display_.firstPage();
+  do {
+    renderMainPageSidebarIndoorRegion(indoorBounds);
   } while (display_.nextPageBW());
 }
 

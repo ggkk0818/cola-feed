@@ -294,18 +294,6 @@ void AppRuntime::runDataTask() {
       continue;
     }
 
-    AppDisplayState nextState =
-        AppDisplayUtils::buildDisplayState(i2cModule_, bleGatewayClient_, nowMs,
-                                           hasPublishedState ? &lastPublishedState : nullptr);
-    bool publishedState = false;
-
-    if (!hasPublishedState || !(nextState == lastPublishedState)) {
-      lastPublishedState = nextState;
-      hasPublishedState = true;
-      publishDisplayState(nextState);
-      publishedState = true;
-    }
-
     bleGatewayClient_.update();
 
     nowMs = millis();
@@ -315,7 +303,7 @@ void AppRuntime::runDataTask() {
       continue;
     }
 
-    nextState = AppDisplayUtils::buildDisplayState(
+    AppDisplayState nextState = AppDisplayUtils::buildDisplayState(
         i2cModule_, bleGatewayClient_, nowMs,
         hasPublishedState ? &lastPublishedState : nullptr);
 
@@ -323,11 +311,6 @@ void AppRuntime::runDataTask() {
       lastPublishedState = nextState;
       hasPublishedState = true;
       publishDisplayState(nextState);
-      publishedState = true;
-    }
-
-    if (publishedState) {
-      continue;
     }
 
     idleDataTaskUntil(nowMs, computeNextWakeDueMs(nowMs));

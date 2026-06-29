@@ -431,8 +431,8 @@ bool I2cModule::readShtc3Environment(EnvironmentSample& sample, uint32_t nowMs) 
   if (!shtc3_.sample()) {
     return false;
   }
-
-  sample.temperatureC = shtc3_.readTempC();
+  // fix temperature offset
+  sample.temperatureC = shtc3_.readTempC() - 0.8f;  
   sample.humidityPercent = shtc3_.readHumidity();
   sample.timestampMs = nowMs;
   return true;
