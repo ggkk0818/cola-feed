@@ -173,15 +173,17 @@ String formatElapsedDuration(const String& currentServerTime, const String& endT
   const uint32_t elapsedMinutes = elapsedSeconds / 60UL;
   const uint32_t elapsedHours = elapsedMinutes / 60UL;
   const uint32_t remainingMinutes = elapsedMinutes % 60UL;
+  const uint32_t flooredRemainingMinutes = remainingMinutes - (remainingMinutes % 5UL);
 
   char buffer[16] = {0};
   if (elapsedHours == 0) {
-    snprintf(buffer, sizeof(buffer), "%luM", static_cast<unsigned long>(elapsedMinutes));
+    const uint32_t flooredMinutes = elapsedMinutes - (elapsedMinutes % 5UL);
+    snprintf(buffer, sizeof(buffer), "%luM", static_cast<unsigned long>(flooredMinutes));
     return String(buffer);
   }
 
   snprintf(buffer, sizeof(buffer), "%luH%02luM", static_cast<unsigned long>(elapsedHours),
-           static_cast<unsigned long>(remainingMinutes));
+           static_cast<unsigned long>(flooredRemainingMinutes));
   return String(buffer);
 }
 

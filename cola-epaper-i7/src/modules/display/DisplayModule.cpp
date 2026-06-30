@@ -148,71 +148,6 @@ bool isDailyForecastDataEqual(const WeatherData::DailyForecastData& left,
          left.textDay == right.textDay;
 }
 
-bool tryParseUintValue(const String& text, uint32_t* value) {
-  if (value == nullptr) {
-    return false;
-  }
-
-  String normalized = text;
-  normalized.trim();
-  if (normalized.isEmpty()) {
-    return false;
-  }
-
-  uint32_t parsedValue = 0;
-  for (size_t index = 0; index < normalized.length(); ++index) {
-    const char ch = normalized[index];
-    if (ch < '0' || ch > '9') {
-      return false;
-    }
-
-    parsedValue = (parsedValue * 10UL) + static_cast<uint32_t>(ch - '0');
-  }
-
-  *value = parsedValue;
-  return true;
-}
-
-bool tryParseElapsedDurationMinutes(const String& durationText, uint32_t* totalMinutes) {
-  if (totalMinutes == nullptr) {
-    return false;
-  }
-
-  String normalized = durationText;
-  normalized.trim();
-  if (normalized.isEmpty() || normalized == "--") {
-    return false;
-  }
-
-  const int minuteMarkerIndex = normalized.lastIndexOf('M');
-  if (minuteMarkerIndex <= 0) {
-    return false;
-  }
-
-  const int hourMarkerIndex = normalized.indexOf('H');
-  uint32_t hours = 0;
-  uint32_t minutes = 0;
-
-  if (hourMarkerIndex >= 0) {
-    if (!tryParseUintValue(normalized.substring(0, hourMarkerIndex), &hours) ||
-        !tryParseUintValue(normalized.substring(hourMarkerIndex + 1, minuteMarkerIndex),
-                           &minutes)) {
-      return false;
-    }
-  } else if (!tryParseUintValue(normalized.substring(0, minuteMarkerIndex), &minutes)) {
-    return false;
-  }
-
-  *totalMinutes = (hours * 60UL) + minutes;
-  return true;
-}
-
-bool isElapsedDurationRefreshBoundary(const String& durationText) {
-  uint32_t totalMinutes = 0;
-  return tryParseElapsedDurationMinutes(durationText, &totalMinutes) && totalMinutes > 0 &&
-         (totalMinutes % 5UL) == 0;
-}
-
 #define WEATHER_ICON_CASE(code)                                                             \
   case code:                                                                               \
     asset = BitmapAsset{WeatherIcon##code::kBitmap, WeatherIcon##code::kWidth,            \
@@ -807,15 +742,11 @@ bool DisplayModule::shouldRefreshMainPageContent(const String& durationText,
     return true;
   }
 
-  if (mainPageContentDuration_ == durationText) {
-    return false;
-  }
-
   if (!showTimestamp || timestampText.isEmpty()) {
     return false;
   }
 
-  return isElapsedDurationRefreshBoundary(durationText);
+  return mainPageContentDuration_ != durationText;
 }
 
 void DisplayModule::renderMainPageLayout() {
