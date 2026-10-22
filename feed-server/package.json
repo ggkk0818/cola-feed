@@ -16,6 +16,7 @@
     "dotenv-cli": "^8.0.0"
   },
   "dependencies": {
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "jsencrypt": "^3.5.4"
   }
 }

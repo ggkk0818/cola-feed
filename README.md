@@ -238,7 +238,7 @@ npm run start:dev      # loads .env.dev via dotenv-cli
 # or: npm start
 ```
 
-Open <http://localhost:3000>. Create `.env.dev` (or export the variables) with at least:
+Open <http://localhost:3000> (default accounts: `admin` / `admin`, `mom` / `mom`). Create `.env.dev` (or export the variables) with at least:
 
 ```dotenv
 PORT=3000
@@ -310,7 +310,7 @@ Wi-Fi credentials must be present in NVS under namespace `wifi_cfg` with keys `s
 
 ### 6. Feed the baby
 
-Open the web UI and tap **喂奶**. The server updates or creates the current record, pushes to all known devices immediately, and the e-paper refreshes within seconds.
+Open the web UI, log in, and tap **喂奶**. The server updates or creates the current record, pushes to all known devices immediately, and the e-paper refreshes within seconds.
 
 ## Configuration
 
@@ -320,7 +320,7 @@ Open the web UI and tap **喂奶**. The server updates or creates the current re
 | --- | --- | --- |
 | `PORT` | `3000` | HTTP port for the API and web UI |
 | `UDP_PORT` | `6113` | UDP discovery port (must match firmware) |
-| `DATA_DIR` | `feed-server/data` | Directory for `feed-records.json` and `clients.json` |
+| `DATA_DIR` | `feed-server/data` | Directory for `feed-records.json`, `clients.json`, and `users.json` |
 | `WEATHER_API_BASE_URL` | empty | QWeather-compatible API base URL; weather is disabled when empty |
 | `WEATHER_API_KEY` | empty | API key |
 | `WEATHER_LOCATION_ID` | empty | Location ID (`WEATHER_LOCATION` is accepted as an alias) |
@@ -343,9 +343,13 @@ Open the web UI and tap **喂奶**. The server updates or creates the current re
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `POST` | `/api/feed` | Record a feeding (creates a record, or extends the current one within 30 minutes) and trigger an immediate device sync |
-| `GET` | `/api/status` | Latest record and full history |
-| `GET` | `/api/clients` | Discovered devices with heartbeat/update times and online flag |
+| `POST` | `/api/feed` | Record a feeding (creates a record, or extends the current one within 30 minutes) and trigger an immediate device sync; anonymous |
+| `GET` | `/api/status` | Latest record and full history; requires an admin-type role |
+| `GET` | `/api/clients` | Discovered devices with heartbeat/update times and online flag; requires an admin-type role |
+| `GET` | `/api/auth/public-key` | PEM public key used to encrypt the login password |
+| `POST` | `/api/auth/login` | Submit `{ "userName", "password": "<RSA-OAEP ciphertext>" }`; returns a Bearer token |
+| `GET` | `/api/auth/me` | Current logged-in user |
+| `POST` | `/api/auth/logout` | Revoke the current token |
 
 All responses use `code`/`data`; the server also keeps a legacy `messagge` field (note the spelling). Example:
 
@@ -364,6 +368,17 @@ All responses use `code`/`data`; the server also keeps a legacy `messagge` field
   "messagge": "成功"
 }
 ```
+
+### Authentication and users
+
+The web login page is `/login.html`. It first fetches `/api/auth/public-key`, encrypts the password in the browser with RSA-OAEP (SHA-256), and submits the ciphertext. The server stores only a salted scrypt hash in the `password` field, formatted as `scrypt$N$r$p$salt$hash`.
+
+- `GET /api/status` and `GET /api/clients` require `Authorization: Bearer <token>` and an admin-type role (1, 3, or 5). Otherwise the server returns HTTP 401 with `reason` set to `UNAUTHORIZED` or `FORBIDDEN`.
+- `POST /api/feed` stays anonymous so existing LAN callers keep working.
+- Tokens live in server memory and expire after 7 days by default; a restart invalidates them. Per-channel lifetimes are already modeled: after a future QR-code login verifies the user, call `issueToken(user, { channel: 'qr' })` for a 365-day token.
+- Accounts live in `data/users.json`. Roles: 1 administrator, 2 feed user, 3 feed admin, 4 food user, 5 food admin.
+- Default accounts: `admin` (roles `[1,2,3,4,5]`, password `admin`) and `mom` (roles `[2,4]`, password `mom`). Replace the default passwords before deployment; there is no password-change API yet, so update the scrypt hash in `data/users.json` directly.
+- An existing Docker data volume does not gain `users.json` automatically. When upgrading, copy `data/users.json` into the volume (or recreate the volume), otherwise no account can log in.
 
 ### Device HTTP endpoints
 
@@ -392,7 +407,7 @@ The gateway also answers `/generate_204`, `/hotspot-detect.html`, `/connecttest.
 - Only the latest 6 records are pushed to devices; the server keeps 12.
 - The BLE link stays up during brief Wi-Fi drops (the gateway retries in the background), but is disabled in provisioning mode. The e-paper keeps showing its last snapshot, with the clock advancing from the last known server time.
 - The Wi-Fi AP password (`12345678`) and the provisioning RSA key pair are development defaults. Replace both before deploying outside a trusted network.
-- The server has no authentication and assumes a trusted LAN; do not expose it directly to the internet.
+- `/api/status` and `/api/clients` now require a Bearer token; `/api/feed` stays anonymous. Default accounts are `admin`/`admin` and `mom`/`mom`; replace them before deployment. The server is still designed for a trusted LAN, so do not expose it directly to the internet.
 
 ## License
 

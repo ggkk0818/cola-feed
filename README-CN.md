@@ -238,7 +238,7 @@ npm run start:dev      # 通过 dotenv-cli 加载 .env.dev
 # 或：npm start
 ```
 
-打开 <http://localhost:3000>。创建 `.env.dev`（或直接导出环境变量），至少包含：
+打开 <http://localhost:3000>（默认账号：`admin` / `admin`，`mom` / `mom`）。创建 `.env.dev`（或直接导出环境变量），至少包含：
 
 ```dotenv
 PORT=3000
@@ -310,7 +310,7 @@ pio run -t upload
 
 ### 6. 开始使用
 
-打开 Web 界面并点击 **喂奶**。服务器会更新或新建当前记录，立即推送到所有已知设备，墨水屏会在数秒内完成刷新。
+打开 Web 界面，登录后点击 **喂奶**。服务器会更新或新建当前记录，立即推送到所有已知设备，墨水屏会在数秒内完成刷新。
 
 ## 配置说明
 
@@ -320,7 +320,7 @@ pio run -t upload
 | --- | --- | --- |
 | `PORT` | `3000` | API 与 Web 界面的 HTTP 端口 |
 | `UDP_PORT` | `6113` | UDP 发现端口（需与固件一致） |
-| `DATA_DIR` | `feed-server/data` | `feed-records.json` 与 `clients.json` 的存放目录 |
+| `DATA_DIR` | `feed-server/data` | `feed-records.json`、`clients.json` 与 `users.json` 的存放目录 |
 | `WEATHER_API_BASE_URL` | 空 | QWeather 兼容接口地址；为空时关闭天气功能 |
 | `WEATHER_API_KEY` | 空 | 接口密钥 |
 | `WEATHER_LOCATION_ID` | 空 | 地区 ID（也接受 `WEATHER_LOCATION` 作为别名） |
@@ -343,9 +343,13 @@ pio run -t upload
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| `POST` | `/api/feed` | 记录一次喂奶（30 分钟内复用当前记录）并立即触发设备同步 |
-| `GET` | `/api/status` | 最新记录与完整历史 |
-| `GET` | `/api/clients` | 已发现设备及其心跳/更新时间、在线状态 |
+| `POST` | `/api/feed` | 记录一次喂奶（30 分钟内复用当前记录）并立即触发设备同步；保持匿名可用 |
+| `GET` | `/api/status` | 最新记录与完整历史；需要管理员类角色 |
+| `GET` | `/api/clients` | 已发现设备及其心跳/更新时间、在线状态；需要管理员类角色 |
+| `GET` | `/api/auth/public-key` | 获取登录密码加密用的 PEM 公钥 |
+| `POST` | `/api/auth/login` | 提交 `{ "userName", "password": "<RSA-OAEP 密文>" }`，成功返回 Bearer token |
+| `GET` | `/api/auth/me` | 获取当前登录用户信息 |
+| `POST` | `/api/auth/logout` | 注销当前 token |
 
 响应统一使用 `code`/`data`，并附带历史遗留的 `messagge` 字段（注意拼写）。示例：
 
@@ -364,6 +368,17 @@ pio run -t upload
   "messagge": "成功"
 }
 ```
+
+### 鉴权与用户
+
+Web 登录页为 `/login.html`。页面先请求 `/api/auth/public-key`，再使用 RSA-OAEP（SHA-256）在浏览器端加密密码后提交；服务端 `password` 字段只保存加盐 scrypt 哈希，格式为 `scrypt$N$r$p$salt$hash`。
+
+- `GET /api/status`、`GET /api/clients` 需要请求头 `Authorization: Bearer <token>`，且账号 roles 含管理员类角色 1、3 或 5，否则返回 HTTP 401（`reason` 为 `UNAUTHORIZED` 或 `FORBIDDEN`）。
+- `POST /api/feed` 保持匿名可用，未登录也可以记录喂奶。
+- token 保存在服务端内存中，默认有效期 7 天，服务重启后全部失效。代码已按登录渠道预留有效期映射，后续扫码登录完成身份校验后可调用 `issueToken(user, { channel: 'qr' })` 获得 365 天有效期。
+- 账号保存在 `data/users.json`，角色枚举：1 管理员、2 喂奶用户、3 喂奶管理员、4 辅食用户、5 辅食管理员。
+- 默认账号：`admin`（roles `[1,2,3,4,5]`，密码 `admin`）、`mom`（roles `[2,4]`，密码 `mom`）。上线前请替换默认密码；当前未提供修改密码接口，可生成新的 scrypt 哈希后更新 `data/users.json`。
+- 已有 Docker 数据卷不会自动获得 `users.json`；升级时请将仓库中的 `data/users.json` 复制进数据卷（或重建数据卷），否则没有账号可登录。
 
 ### 设备 HTTP 接口
 
@@ -392,7 +407,7 @@ pio run -t upload
 - 下发给设备的是最近 6 条记录，服务端最多保留 12 条。
 - 短暂断网时网关会在后台重连，BLE 链路仍然可用；进入配网模式后 BLE 会被关闭。此时墨水屏继续显示最后一次的画面，时钟会基于最后一次服务端时间继续走时。
 - 配网 AP 密码（`12345678`）与配网 RSA 密钥对均为开发默认值，部署到可信网络之外前请务必更换。
-- 服务器没有鉴权，默认运行在可信局域网内，请勿直接暴露到公网。
+- 服务器已对 `/api/status`、`/api/clients` 启用 Bearer Token 鉴权，`/api/feed` 保持匿名；默认账号为 `admin`/`admin` 与 `mom`/`mom`，上线前请替换。服务仍按可信局域网设计，请勿直接暴露到公网。
 
 ## 许可证
 

@@ -10,8 +10,14 @@
     <main class="container">
       <section class="panel">
         <div class="tabs">
-          <button id="tabOverviewBtn" class="tab-btn active" type="button">概览</button>
-          <button id="tabClientsBtn" class="tab-btn" type="button">客户端</button>
+          <div class="tabs-nav">
+            <button id="tabOverviewBtn" class="tab-btn active" type="button">概览</button>
+            <button id="tabClientsBtn" class="tab-btn" type="button">客户端</button>
+          </div>
+          <div class="user-bar">
+            <span id="currentUser" class="current-user"></span>
+            <button id="logoutBtn" class="logout-btn" type="button">退出</button>
+          </div>
         </div>
 
         <section id="overviewPane" class="tab-pane active" aria-label="概览">

@@ -1,3 +1,4 @@
 data/feed-records.json
 data/clients.json
+data/users.json
 .env.dev

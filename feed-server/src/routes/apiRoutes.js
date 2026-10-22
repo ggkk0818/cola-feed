@@ -1,9 +1,18 @@
 const express = require('express');
+const { ADMIN_ROLES } = require('../auth/roles');
+const {
+  createAuthMiddleware,
+  requireAnyRole,
+} = require('../middleware/auth');
 
 function createApiRouter(options) {
-  const { feedService, clientService } = options;
+  const { feedService, clientService, authService } = options;
   const router = express.Router();
 
+  const authenticate = createAuthMiddleware(authService);
+  const requireAdmin = requireAnyRole(...ADMIN_ROLES);
+
+  // 喂奶记录保持匿名可写，供局域网内现有调用方继续使用。
   router.post('/feed', (req, res) => {
     const currentRecord = feedService.feedNow();
 
@@ -19,7 +28,7 @@ function createApiRouter(options) {
     });
   });
 
-  router.get('/status', (req, res) => {
+  router.get('/status', authenticate, requireAdmin, (req, res) => {
     res.json({
       code: 200,
       data: feedService.getStatus(),
@@ -27,7 +36,7 @@ function createApiRouter(options) {
     });
   });
 
-  router.get('/clients', (req, res) => {
+  router.get('/clients', authenticate, requireAdmin, (req, res) => {
     res.json({
       code: 200,
       data: {

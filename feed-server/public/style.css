@@ -60,10 +60,54 @@ body {
 
 .tabs {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
   padding: 14px 16px;
   border-bottom: 1px solid var(--line);
   background: var(--surface);
+}
+
+.tabs-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.user-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.current-user {
+  max-width: 180px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logout-btn {
+  border: 1px solid var(--chip-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.logout-btn:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.logout-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .tab-btn {
@@ -168,7 +212,21 @@ tbody tr:last-child td {
   }
 
   .tabs {
+    flex-wrap: wrap;
     padding: 12px;
+  }
+
+  .tabs-nav {
+    flex: 1 1 100%;
+  }
+
+  .user-bar {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .current-user {
+    max-width: none;
   }
 
   .tab-btn {

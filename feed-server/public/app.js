@@ -1,3 +1,13 @@
+const AUTH_STORAGE_KEY = 'feedServerAuth';
+const ADMIN_ROLES = [1, 3, 5];
+const ROLE_LABELS = {
+  1: '管理员',
+  2: '喂奶用户',
+  3: '喂奶管理员',
+  4: '辅食用户',
+  5: '辅食管理员',
+};
+
 const recordsBody = document.getElementById('recordsBody');
 const clientsBody = document.getElementById('clientsBody');
 const feedBtn = document.getElementById('feedBtn');
@@ -6,8 +16,100 @@ const tabOverviewBtn = document.getElementById('tabOverviewBtn');
 const tabClientsBtn = document.getElementById('tabClientsBtn');
 const overviewPane = document.getElementById('overviewPane');
 const clientsPane = document.getElementById('clientsPane');
+const currentUserEl = document.getElementById('currentUser');
+const logoutBtn = document.getElementById('logoutBtn');
 
 let lastFeedEndMs = null;
+let currentAuth = null;
+let currentUser = null;
+
+function readStoredAuth() {
+  try {
+    const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.token !== 'string' || !parsed.token) {
+      return null;
+    }
+
+    return parsed;
+  } catch (error) {
+    return null;
+  }
+}
+
+function clearStoredAuth() {
+  try {
+    window.localStorage.removeItem(AUTH_STORAGE_KEY);
+  } catch (error) {
+    // Ignore storage failures (private mode, disabled storage, ...).
+  }
+}
+
+function getAuthToken() {
+  return currentAuth && currentAuth.token ? currentAuth.token : '';
+}
+
+function buildLoginUrl() {
+  const next = `${window.location.pathname}${window.location.search}`;
+  if (!next || next === '/' || next.indexOf('/login') === 0) {
+    return '/login.html';
+  }
+
+  return `/login.html?next=${encodeURIComponent(next)}`;
+}
+
+function redirectToLogin() {
+  window.location.replace(buildLoginUrl());
+}
+
+function handleUnauthorized() {
+  clearStoredAuth();
+  currentAuth = null;
+  currentUser = null;
+  redirectToLogin();
+}
+
+async function apiFetch(url, options = {}) {
+  const headers = new Headers(options.headers || {});
+  const token = getAuthToken();
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  const response = await fetch(url, { ...options, headers });
+
+  if (response.status === 401) {
+    let payload = null;
+    try {
+      payload = await response.clone().json();
+    } catch (error) {
+      payload = null;
+    }
+
+    if (payload && payload.reason === 'FORBIDDEN') {
+      const forbiddenError = new Error(payload.message || '无权限访问');
+      forbiddenError.forbidden = true;
+      throw forbiddenError;
+    }
+
+    handleUnauthorized();
+    throw new Error('unauthorized');
+  }
+
+  return response;
+}
+
+function canViewAdminData() {
+  return (
+    !!currentUser &&
+    Array.isArray(currentUser.roles) &&
+    currentUser.roles.some((role) => ADMIN_ROLES.includes(role))
+  );
+}
 
 function padTwoDigits(value) {
   return String(value).padStart(2, '0');
@@ -150,7 +252,20 @@ function renderClientRows(clients) {
   clientsBody.innerHTML = rows;
 }
 
+function renderPermissionDenied() {
+  elapsedTime.textContent = '无权限查看';
+  recordsBody.innerHTML =
+    '<tr><td colspan="4" class="empty">当前账号无权限查看喂奶记录</td></tr>';
+  clientsBody.innerHTML =
+    '<tr><td colspan="5" class="empty">当前账号无权限查看客户端列表</td></tr>';
+}
+
 function renderElapsed() {
+  if (!canViewAdminData()) {
+    elapsedTime.textContent = '无权限查看';
+    return;
+  }
+
   if (!lastFeedEndMs || !Number.isFinite(lastFeedEndMs)) {
     elapsedTime.textContent = '暂无记录';
     return;
@@ -169,7 +284,11 @@ function switchTab(tabName) {
 }
 
 async function loadStatus() {
-  const response = await fetch('/api/status');
+  const response = await apiFetch('/api/status', { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`status request failed: ${response.status}`);
+  }
+
   const result = await response.json();
   const records = result?.data?.records || [];
   const lastFeed = result?.data?.lastFeed || null;
@@ -180,17 +299,32 @@ async function loadStatus() {
 }
 
 async function loadClients() {
-  const response = await fetch('/api/clients');
+  const response = await apiFetch('/api/clients', { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`clients request failed: ${response.status}`);
+  }
+
   const result = await response.json();
   const clients = result?.data?.clients || [];
   renderClientRows(clients);
 }
 
 async function refreshAll() {
-  try {
-    await Promise.all([loadStatus(), loadClients()]);
-  } catch (error) {
-    // Keep UI responsive even if network intermittently fails.
+  if (!canViewAdminData()) {
+    renderPermissionDenied();
+    return;
+  }
+
+  const results = await Promise.allSettled([loadStatus(), loadClients()]);
+  if (
+    results.some(
+      (result) =>
+        result.status === 'rejected' &&
+        result.reason &&
+        result.reason.forbidden
+    )
+  ) {
+    renderPermissionDenied();
   }
 }
 
@@ -199,25 +333,95 @@ async function feedNow() {
   feedBtn.textContent = '处理中...';
 
   try {
-    await fetch('/api/feed', { method: 'POST' });
+    await apiFetch('/api/feed', { method: 'POST' });
     await refreshAll();
+  } catch (error) {
+    // apiFetch redirects on an invalid token; keep the page quiet otherwise.
   } finally {
     feedBtn.disabled = false;
     feedBtn.textContent = '喂奶';
   }
 }
 
-tabOverviewBtn.addEventListener('click', () => {
+async function loadCurrentUser() {
+  const response = await apiFetch('/api/auth/me', { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`me request failed: ${response.status}`);
+  }
+
+  const result = await response.json();
+  const user = result?.data;
+  if (!user || !Array.isArray(user.roles)) {
+    throw new Error('invalid current user payload');
+  }
+
+  currentUser = user;
+  currentUserEl.textContent = user.userName || '';
+  const roleLabels = user.roles
+    .map((role) => ROLE_LABELS[role])
+    .filter(Boolean);
+  currentUserEl.title = roleLabels.length
+    ? `角色：${roleLabels.join('、')}`
+    : '';
+}
+
+async function logout() {
+  logoutBtn.disabled = true;
+  const token = getAuthToken();
+
+  try {
+    if (token) {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    }
+  } catch (error) {
+    // Local state is cleared below even when the request cannot reach the server.
+  }
+
+  clearStoredAuth();
+  currentAuth = null;
+  currentUser = null;
+  redirectToLogin();
+}
+
+async function startApp() {
+  try {
+    await loadCurrentUser();
+  } catch (error) {
+    // A 401 already redirected to the login page; other failures leave the
+    // page empty rather than sending the user in circles.
+    return;
+  }
+
+  tabOverviewBtn.addEventListener('click', () => {
+    switchTab('overview');
+  });
+
+  tabClientsBtn.addEventListener('click', () => {
+    switchTab('clients');
+  });
+
+  feedBtn.addEventListener('click', feedNow);
+  logoutBtn.addEventListener('click', logout);
+
+  setInterval(renderElapsed, 1000);
+  setInterval(refreshAll, 5000);
   switchTab('overview');
-});
+  refreshAll();
+}
 
-tabClientsBtn.addEventListener('click', () => {
-  switchTab('clients');
-});
+function init() {
+  currentAuth = readStoredAuth();
+  if (!currentAuth) {
+    redirectToLogin();
+    return;
+  }
 
-feedBtn.addEventListener('click', feedNow);
+  startApp();
+}
 
-setInterval(renderElapsed, 1000);
-setInterval(refreshAll, 5000);
-switchTab('overview');
-refreshAll();
+init();
