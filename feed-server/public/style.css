@@ -158,20 +158,6 @@ body {
   color: var(--muted);
 }
 
-#feedBtn {
-  border: none;
-  background: var(--primary);
-  color: #ffffff;
-  padding: 8px 14px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-#feedBtn:hover {
-  background: var(--primary-hover);
-}
-
 .table-wrap {
   width: 100%;
   overflow-x: auto;
@@ -250,12 +236,6 @@ tbody tr:last-child td {
     font-size: 12px;
   }
 
-  #feedBtn {
-    width: 100%;
-    min-height: 42px;
-    font-size: 15px;
-  }
-
   .table-wrap {
     overflow: visible;
     padding: 8px 12px 12px;
@@ -327,10 +307,6 @@ tbody tr:last-child td {
 
   .panel-header h1 {
     font-size: 20px;
-  }
-
-  #feedBtn {
-    min-width: 96px;
   }
 
   th,

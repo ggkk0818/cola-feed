@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README-CN.md)
 
-An IoT baby-feeding tracker: tap **喂奶 (Feed)** in the web UI and the time since the last feeding is pushed to low-power e-paper displays around the home.
+An IoT baby-feeding tracker: call the feed API and the time since the last feeding is pushed to low-power e-paper displays around the home.
 
 ## Overview
 
@@ -26,7 +26,7 @@ Browser ──HTTP──► feed-server (:3000)
 
 ## Features
 
-- **Feeding log** — one-tap feed button, elapsed timer, persistent JSON history (last 12 records, last 6 pushed to devices).
+- **Feeding log** — elapsed timer, persistent JSON history (last 12 records, last 6 pushed to devices).
 - **Two e-paper targets** — a direct-Wi-Fi ESP32-S3 board and a BLE-only ESP32-C5 board with sensors and battery monitoring.
 - **Automatic discovery** — devices broadcast `{"type":"discover", ...}` to UDP 6113 on connect and every 5 minutes.
 - **Push updates** — the server refreshes each device every 5 minutes, and immediately after a feeding is recorded.
@@ -310,7 +310,7 @@ Wi-Fi credentials must be present in NVS under namespace `wifi_cfg` with keys `s
 
 ### 6. Feed the baby
 
-Open the web UI, log in, and tap **喂奶**. The server updates or creates the current record, pushes to all known devices immediately, and the e-paper refreshes within seconds.
+Open the web UI and log in to view feeding records and clients; record a feeding via `POST /api/feed` (the web UI no longer exposes a feed button). The server updates or creates the current record, pushes to all known devices immediately, and the e-paper refreshes within seconds.
 
 ## Configuration
 

@@ -10,7 +10,6 @@ const ROLE_LABELS = {
 
 const recordsBody = document.getElementById('recordsBody');
 const clientsBody = document.getElementById('clientsBody');
-const feedBtn = document.getElementById('feedBtn');
 const elapsedTime = document.getElementById('elapsedTime');
 const tabOverviewBtn = document.getElementById('tabOverviewBtn');
 const tabClientsBtn = document.getElementById('tabClientsBtn');
@@ -328,21 +327,6 @@ async function refreshAll() {
   }
 }
 
-async function feedNow() {
-  feedBtn.disabled = true;
-  feedBtn.textContent = '处理中...';
-
-  try {
-    await apiFetch('/api/feed', { method: 'POST' });
-    await refreshAll();
-  } catch (error) {
-    // apiFetch redirects on an invalid token; keep the page quiet otherwise.
-  } finally {
-    feedBtn.disabled = false;
-    feedBtn.textContent = '喂奶';
-  }
-}
-
 async function loadCurrentUser() {
   const response = await apiFetch('/api/auth/me', { cache: 'no-store' });
   if (!response.ok) {
@@ -405,7 +389,6 @@ async function startApp() {
     switchTab('clients');
   });
 
-  feedBtn.addEventListener('click', feedNow);
   logoutBtn.addEventListener('click', logout);
 
   setInterval(renderElapsed, 1000);
