@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "express": "^5.2.1",
-    "jsencrypt": "^3.5.4"
+    "jsencrypt": "^3.5.4",
+    "multer": "^2.5.0"
   }
 }

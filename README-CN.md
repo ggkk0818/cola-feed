@@ -350,8 +350,15 @@ pio run -t upload
 | `POST` | `/api/auth/login` | 提交 `{ "userName", "password": "<RSA-OAEP 密文>" }`，成功返回 Bearer token |
 | `GET` | `/api/auth/me` | 获取当前登录用户信息 |
 | `POST` | `/api/auth/logout` | 注销当前 token |
+| `GET` | `/api/foods` | 辅食列表，`pageIndex` 默认 0、`pageSize` 默认 7，按日期倒序；需要角色 1/4/5 |
+| `POST` | `/api/foods` | 新增一天辅食（`date` + 上午/下午辅食类型 id 数组）；同一天只允许一条 |
+| `PUT` | `/api/foods/{id}` | 修改辅食记录，参数同新增 |
+| `DELETE` | `/api/foods/{id}` | 逻辑删除辅食记录 |
+| `GET` | `/api/foodTypes` | 辅食类型列表，分页与排序规则同上（类型按创建时间倒序）；需要角色 1/4/5 |
+| `POST` | `/api/foodTypes` | 以 multipart/form-data 新增辅食类型：`name`、`coverImageFile`、`coverBinFile`、`coverBinSmallFile` |
+| `DELETE` | `/api/foodTypes/{id}` | 逻辑删除辅食类型 |
 
-响应统一使用 `code`/`data`，并附带历史遗留的 `messagge` 字段（注意拼写）。示例：
+响应统一使用 `code`/`data`，并附带历史遗留的 `messagge` 字段（注意拼写）。辅食相关接口使用标准的 `message` 字段。示例：
 
 ```json
 {
@@ -374,11 +381,20 @@ pio run -t upload
 Web 登录页为 `/login.html`。页面先请求 `/api/auth/public-key`，再使用 RSA-OAEP（SHA-256）在浏览器端加密密码后提交；服务端 `password` 字段只保存加盐 scrypt 哈希，格式为 `scrypt$N$r$p$salt$hash`。
 
 - `GET /api/status`、`GET /api/clients` 需要请求头 `Authorization: Bearer <token>`，且账号 roles 含管理员类角色 1、3 或 5，否则返回 HTTP 401（`reason` 为 `UNAUTHORIZED` 或 `FORBIDDEN`）。
+- 辅食接口（`/api/foods`、`/api/foodTypes` 的读写）同样需要 `Authorization: Bearer <token>`，允许角色 1、4、5。
 - `POST /api/feed` 保持匿名可用，未登录也可以记录喂奶。
 - token 保存在服务端内存中，默认有效期 7 天，服务重启后全部失效。代码已按登录渠道预留有效期映射，后续扫码登录完成身份校验后可调用 `issueToken(user, { channel: 'qr' })` 获得 365 天有效期。
 - 账号保存在 `data/users.json`，角色枚举：1 管理员、2 喂奶用户、3 喂奶管理员、4 辅食用户、5 辅食管理员。
 - 默认账号：`admin`（roles `[1,2,3,4,5]`，密码 `admin`）、`mom`（roles `[2,4]`，密码 `mom`）。上线前请替换默认密码；当前未提供修改密码接口，可生成新的 scrypt 哈希后更新 `data/users.json`。
 - 已有 Docker 数据卷不会自动获得 `users.json`；升级时请将仓库中的 `data/users.json` 复制进数据卷（或重建数据卷），否则没有账号可登录。
+
+### 辅食数据
+
+- 辅食按天保存到 `data/foods.json`，每天分 `morningFoods`、`afternoonFoods` 两个时段；辅食类型保存到 `data/foodTypes.json`。两个文件由服务启动时自动创建。
+- 辅食记录和辅食类型均使用逻辑删除：删除时写入 `isDel: 1`、`updateUser` 与 `updateTime`，列表接口只返回 `isDel: 0` 的记录后再分页。
+- 上传的图片与 bin 文件保存在 `data/static/foodimg/年-月/` 下，通过 `/static/foodimg/...` 访问；JSON 中保存的 URL 为不带前导斜杠的 `static/foodimg/...`，便于客户端按服务地址拼接。Docker 部署时该目录位于数据卷内。
+- `POST /api/foodTypes` 的 `name` 长度为 1-20 个字符；图片仅支持 jpg、jpeg、png；三个文件均为必填，单个文件最大 50MB。
+- 删除辅食类型不会删除历史辅食记录：辅食记录中保存了名称与图片 URL 的快照。
 
 ### 设备 HTTP 接口
 

@@ -5,4 +5,9 @@ npm-debug.log*
 Dockerfile
 docker-compose.yml
 data/clients.json
+data/users.json
 data/feed-records.json
+data/foods.json
+data/foodTypes.json
+data/static
+data/.tmp

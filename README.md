@@ -350,8 +350,15 @@ Open the web UI and log in to view feeding records and clients; record a feeding
 | `POST` | `/api/auth/login` | Submit `{ "userName", "password": "<RSA-OAEP ciphertext>" }`; returns a Bearer token |
 | `GET` | `/api/auth/me` | Current logged-in user |
 | `POST` | `/api/auth/logout` | Revoke the current token |
+| `GET` | `/api/foods` | Food list; `pageIndex` defaults to 0, `pageSize` to 7, sorted by date descending; roles 1/4/5 |
+| `POST` | `/api/foods` | Add one day of food (`date` plus morning/afternoon type-id arrays); one record per date |
+| `PUT` | `/api/foods/{id}` | Update a food record; same payload as create |
+| `DELETE` | `/api/foods/{id}` | Soft-delete a food record |
+| `GET` | `/api/foodTypes` | Food type list with the same paging (types sorted by creation time descending); roles 1/4/5 |
+| `POST` | `/api/foodTypes` | Add a food type as multipart/form-data: `name`, `coverImageFile`, `coverBinFile`, `coverBinSmallFile` |
+| `DELETE` | `/api/foodTypes/{id}` | Soft-delete a food type |
 
-All responses use `code`/`data`; the server also keeps a legacy `messagge` field (note the spelling). Example:
+All responses use `code`/`data`; the server also keeps a legacy `messagge` field (note the spelling). Food endpoints use the correctly spelled `message` field. Example:
 
 ```json
 {
@@ -374,11 +381,20 @@ All responses use `code`/`data`; the server also keeps a legacy `messagge` field
 The web login page is `/login.html`. It first fetches `/api/auth/public-key`, encrypts the password in the browser with RSA-OAEP (SHA-256), and submits the ciphertext. The server stores only a salted scrypt hash in the `password` field, formatted as `scrypt$N$r$p$salt$hash`.
 
 - `GET /api/status` and `GET /api/clients` require `Authorization: Bearer <token>` and an admin-type role (1, 3, or 5). Otherwise the server returns HTTP 401 with `reason` set to `UNAUTHORIZED` or `FORBIDDEN`.
+- Food endpoints (`/api/foods` and `/api/foodTypes`, both read and write) also require `Authorization: Bearer <token>` and allow roles 1, 4, and 5.
 - `POST /api/feed` stays anonymous so existing LAN callers keep working.
 - Tokens live in server memory and expire after 7 days by default; a restart invalidates them. Per-channel lifetimes are already modeled: after a future QR-code login verifies the user, call `issueToken(user, { channel: 'qr' })` for a 365-day token.
 - Accounts live in `data/users.json`. Roles: 1 administrator, 2 feed user, 3 feed admin, 4 food user, 5 food admin.
 - Default accounts: `admin` (roles `[1,2,3,4,5]`, password `admin`) and `mom` (roles `[2,4]`, password `mom`). Replace the default passwords before deployment; there is no password-change API yet, so update the scrypt hash in `data/users.json` directly.
 - An existing Docker data volume does not gain `users.json` automatically. When upgrading, copy `data/users.json` into the volume (or recreate the volume), otherwise no account can log in.
+
+### Food data
+
+- Food days are stored in `data/foods.json` with `morningFoods` and `afternoonFoods`; food types are stored in `data/foodTypes.json`. Both files are created automatically at startup.
+- Food records and types use logical deletion: deletion writes `isDel: 1`, `updateUser`, and `updateTime`; list endpoints filter to `isDel: 0` before paging.
+- Uploaded images and bin files live in `data/static/foodimg/YYYY-MM/` and are served from `/static/foodimg/...`. JSON stores URLs without a leading slash (`static/foodimg/...`) so clients can join them to the server base URL. In Docker this directory is inside the data volume.
+- `POST /api/foodTypes` accepts a `name` of 1-20 characters; images must be jpg, jpeg, or png; all three files are required and each is limited to 50MB.
+- Deleting a food type does not delete historical food records; each food item keeps a snapshot of the type name and image URLs.
 
 ### Device HTTP endpoints
 

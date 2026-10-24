@@ -5,67 +5,270 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>喂奶记录</title>
     <link rel="stylesheet" href="/style.css" />
+    <script src="/vendor/vue.global.prod.js"></script>
   </head>
   <body>
-    <main class="container">
-      <section class="panel">
-        <div class="tabs">
-          <div class="tabs-nav">
-            <button id="tabOverviewBtn" class="tab-btn active" type="button">概览</button>
-            <button id="tabClientsBtn" class="tab-btn" type="button">客户端</button>
+    <div id="app" v-cloak>
+      <div v-if="bootError" class="boot-screen">
+        <p>{{ bootError }}</p>
+        <button class="tab-btn active" type="button" @click="init">重试</button>
+      </div>
+
+      <div v-else-if="!user" class="boot-screen">加载中…</div>
+
+      <main v-else class="container">
+        <section class="panel">
+          <div class="tabs">
+            <div class="tabs-nav">
+              <button
+                class="tab-btn"
+                :class="{ active: activeTab === 'overview' }"
+                type="button"
+                @click="switchTab('overview')"
+              >
+                概览
+              </button>
+              <button
+                v-if="canViewFoods"
+                id="tabFoodsBtn"
+                class="tab-btn"
+                :class="{ active: activeTab === 'foods' }"
+                type="button"
+                @click="switchTab('foods')"
+              >
+                辅食
+              </button>
+              <button
+                class="tab-btn"
+                :class="{ active: activeTab === 'clients' }"
+                type="button"
+                @click="switchTab('clients')"
+              >
+                客户端
+              </button>
+            </div>
+            <div class="user-bar">
+              <span class="current-user" :title="roleTitle">{{ user.userName }}</span>
+              <button
+                class="logout-btn"
+                type="button"
+                :disabled="logoutBusy"
+                @click="logout"
+              >
+                {{ logoutBusy ? '退出中...' : '退出' }}
+              </button>
+            </div>
           </div>
-          <div class="user-bar">
-            <span id="currentUser" class="current-user"></span>
-            <button id="logoutBtn" class="logout-btn" type="button">退出</button>
-          </div>
+
+          <section
+            class="tab-pane"
+            :class="{ active: activeTab === 'overview' }"
+            aria-label="概览"
+          >
+            <header class="panel-header">
+              <div class="title-block">
+                <h1>喂奶记录</h1>
+                <p class="elapsed">距上次喂奶已过：<span>{{ elapsedText }}</span></p>
+              </div>
+            </header>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>开始时间</th>
+                    <th>结束时间</th>
+                    <th>持续时间</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-if="overviewPermissionDenied">
+                    <td colspan="4" class="empty">当前账号无权限查看喂奶记录</td>
+                  </tr>
+                  <tr v-else-if="overviewLoading && !overviewRecords.length">
+                    <td colspan="4" class="empty">加载中…</td>
+                  </tr>
+                  <tr v-else-if="!overviewRecords.length">
+                    <td colspan="4" class="empty">暂无喂奶记录</td>
+                  </tr>
+                  <tr v-for="record in overviewRecords" :key="record.id">
+                    <td data-label="ID">{{ record.id || '-' }}</td>
+                    <td data-label="开始时间">{{ formatDateTime(record.startTime) }}</td>
+                    <td data-label="结束时间">{{ formatDateTime(record.endTime) }}</td>
+                    <td data-label="持续时间">{{ formatDuration(record.duration) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section
+            class="tab-pane"
+            :class="{ active: activeTab === 'foods' }"
+            aria-label="辅食记录"
+          >
+            <header class="panel-header">
+              <div class="title-block">
+                <h1>辅食记录</h1>
+                <p class="elapsed">按日期倒序展示，每天分为上午和下午两个时段</p>
+              </div>
+            </header>
+
+            <div v-if="foodsLoading" class="empty-state">正在加载辅食记录…</div>
+            <div v-else-if="foodsError" class="empty-state">{{ foodsError }}</div>
+            <template v-else>
+              <div class="table-wrap">
+                <table class="foods-table">
+                  <thead>
+                    <tr>
+                      <th>日期</th>
+                      <th>上午辅食</th>
+                      <th>下午辅食</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-if="!foods.length">
+                      <td colspan="3" class="empty">暂无辅食记录</td>
+                    </tr>
+                    <tr v-for="day in foods" :key="day.id">
+                      <td data-label="日期" class="food-date">{{ day.date }}</td>
+                      <td data-label="上午辅食">
+                        <div class="food-list">
+                          <span v-if="!day.morningFoods.length" class="food-none">—</span>
+                          <span
+                            v-for="food in day.morningFoods"
+                            :key="food.id"
+                            class="food-chip"
+                            tabindex="0"
+                            @mouseenter="showFoodTooltip($event, food)"
+                            @mouseleave="hideFoodTooltip"
+                            @focus="showFoodTooltip($event, food)"
+                            @blur="hideFoodTooltip"
+                          >
+                            <img
+                              class="food-icon"
+                              :src="resolveAsset(food.coverImageUrl)"
+                              :alt="food.name"
+                              width="16"
+                              height="16"
+                              @error="handleFoodImageError"
+                            />
+                            <span class="food-name">{{ shortFoodName(food.name) }}</span>
+                          </span>
+                        </div>
+                      </td>
+                      <td data-label="下午辅食">
+                        <div class="food-list">
+                          <span v-if="!day.afternoonFoods.length" class="food-none">—</span>
+                          <span
+                            v-for="food in day.afternoonFoods"
+                            :key="food.id"
+                            class="food-chip"
+                            tabindex="0"
+                            @mouseenter="showFoodTooltip($event, food)"
+                            @mouseleave="hideFoodTooltip"
+                            @focus="showFoodTooltip($event, food)"
+                            @blur="hideFoodTooltip"
+                          >
+                            <img
+                              class="food-icon"
+                              :src="resolveAsset(food.coverImageUrl)"
+                              :alt="food.name"
+                              width="16"
+                              height="16"
+                              @error="handleFoodImageError"
+                            />
+                            <span class="food-name">{{ shortFoodName(food.name) }}</span>
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div v-if="foodTotal > foodPageSize" class="pager">
+                <button
+                  class="pager-btn"
+                  type="button"
+                  :disabled="foodPageIndex <= 0 || foodsLoading"
+                  @click="changeFoodPage(-1)"
+                >
+                  上一页
+                </button>
+                <span class="pager-info">
+                  第 {{ foodPageIndex + 1 }} / {{ foodPageCount }} 页 · 共 {{ foodTotal }} 天
+                </span>
+                <button
+                  class="pager-btn"
+                  type="button"
+                  :disabled="foodPageIndex >= foodPageCount - 1 || foodsLoading"
+                  @click="changeFoodPage(1)"
+                >
+                  下一页
+                </button>
+              </div>
+            </template>
+          </section>
+
+          <section
+            class="tab-pane"
+            :class="{ active: activeTab === 'clients' }"
+            aria-label="客户端列表"
+          >
+            <header class="panel-header">
+              <div class="title-block">
+                <h1>客户端列表</h1>
+                <p class="elapsed">通过UDP广播自动发现在线客户端</p>
+              </div>
+            </header>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>chipId</th>
+                    <th>IP</th>
+                    <th>心跳时间</th>
+                    <th>更新时间</th>
+                    <th>状态</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-if="clientsPermissionDenied">
+                    <td colspan="5" class="empty">当前账号无权限查看客户端列表</td>
+                  </tr>
+                  <tr v-else-if="clientsLoading && !clients.length">
+                    <td colspan="5" class="empty">加载中…</td>
+                  </tr>
+                  <tr v-else-if="!clients.length">
+                    <td colspan="5" class="empty">暂无客户端数据</td>
+                  </tr>
+                  <tr v-for="client in clients" :key="client.chipId">
+                    <td data-label="chipId">{{ client.chipId || '-' }}</td>
+                    <td data-label="IP">{{ client.ip || '-' }}</td>
+                    <td data-label="心跳时间">{{ formatDateTime(client.heartbeatTime) }}</td>
+                    <td data-label="更新时间">{{ formatDateTime(client.updateTime) }}</td>
+                    <td data-label="状态">{{ client.isOnline ? '在线' : '离线' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+      </main>
+
+      <teleport to="body">
+        <div
+          v-if="tooltip.visible"
+          class="food-tooltip"
+          :class="tooltip.placement"
+          :style="{ left: tooltip.x + 'px', top: tooltip.y + 'px' }"
+        >
+          <img :src="tooltip.url" alt="" width="48" height="48" />
+          <span>{{ tooltip.name }}</span>
         </div>
-
-        <section id="overviewPane" class="tab-pane active" aria-label="概览">
-          <header class="panel-header">
-            <div class="title-block">
-              <h1>喂奶记录</h1>
-              <p class="elapsed">距上次喂奶已过：<span id="elapsedTime">暂无记录</span></p>
-            </div>
-          </header>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>开始时间</th>
-                  <th>结束时间</th>
-                  <th>持续时间</th>
-                </tr>
-              </thead>
-              <tbody id="recordsBody"></tbody>
-            </table>
-          </div>
-        </section>
-
-        <section id="clientsPane" class="tab-pane" aria-label="客户端列表">
-          <header class="panel-header">
-            <div class="title-block">
-              <h1>客户端列表</h1>
-              <p class="elapsed">通过UDP广播自动发现在线客户端</p>
-            </div>
-          </header>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>chipId</th>
-                  <th>IP</th>
-                  <th>心跳时间</th>
-                  <th>更新时间</th>
-                  <th>状态</th>
-                </tr>
-              </thead>
-              <tbody id="clientsBody"></tbody>
-            </table>
-          </div>
-        </section>
-      </section>
-    </main>
+      </teleport>
+    </div>
     <script src="/app.js"></script>
   </body>
 </html>
