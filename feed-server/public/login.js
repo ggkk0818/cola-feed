@@ -44,7 +44,7 @@
       next.indexOf('/login') === 0 ||
       /[\u0000-\u001f]/.test(next)
     ) {
-      return '/';
+      return './';
     }
 
     return next;
@@ -137,7 +137,7 @@
   }
 
   async function fetchPublicKey() {
-    var response = await window.fetch('/api/auth/public-key', {
+    var response = await window.fetch('api/auth/public-key', {
       cache: 'no-store',
       headers: { Accept: 'application/json' },
     });
@@ -173,7 +173,7 @@
       var publicKey = await fetchPublicKey();
       var encryptedPassword = encryptPassword(publicKey, password);
 
-      var response = await window.fetch('/api/auth/login', {
+      var response = await window.fetch('api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -222,7 +222,7 @@
     }
 
     try {
-      var response = await window.fetch('/api/auth/me', {
+      var response = await window.fetch('api/auth/me', {
         cache: 'no-store',
         headers: {
           Authorization: 'Bearer ' + auth.token,

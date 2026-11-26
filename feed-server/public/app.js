@@ -12,6 +12,7 @@
   const AUTH_STORAGE_KEY = 'feedServerAuth';
   const ADMIN_ROLES = [1, 3, 5];
   const FOOD_ROLES = [1, 4, 5];
+  const FOOD_CLIENT_ROLES = [1, 5];
   const ROLE_LABELS = {
     1: '管理员',
     2: '喂奶用户',
@@ -52,10 +53,10 @@
   function buildLoginUrl() {
     const next = `${window.location.pathname}${window.location.search}`;
     if (!next || next === '/' || next.indexOf('/login') === 0) {
-      return '/login.html';
+      return 'login.html';
     }
 
-    return `/login.html?next=${encodeURIComponent(next)}`;
+    return `login.html?next=${encodeURIComponent(next)}`;
   }
 
   function redirectToLogin() {
@@ -168,7 +169,8 @@
       return trimmed;
     }
 
-    return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+    // 资源使用相对路径，便于通过反向代理部署在子目录下。
+    return trimmed.replace(/^\/+/, '') || FOOD_ICON_PLACEHOLDER;
   }
 
   createApp({
@@ -193,6 +195,18 @@
         foodPageSize: 7,
         foodsLoading: false,
         foodsError: '',
+        foodClients: [],
+        foodClientTotal: 0,
+        foodClientPageIndex: 0,
+        foodClientPageSize: 20,
+        foodClientsLoading: false,
+        foodClientsError: '',
+        foodClientsPermissionDenied: false,
+        foodClientDeleteTarget: null,
+        foodClientDeleteBusy: false,
+        foodClientDeleteError: '',
+        foodClientNotice: null,
+        foodClientNoticeTimer: null,
         tooltip: {
           visible: false,
           name: '',
@@ -221,6 +235,14 @@
           !!this.user &&
           Array.isArray(this.user.roles) &&
           this.user.roles.some((role) => FOOD_ROLES.includes(role))
+        );
+      },
+
+      canViewFoodClients() {
+        return (
+          !!this.user &&
+          Array.isArray(this.user.roles) &&
+          this.user.roles.some((role) => FOOD_CLIENT_ROLES.includes(role))
         );
       },
 
@@ -258,17 +280,26 @@
       foodPageCount() {
         return Math.max(1, Math.ceil(this.foodTotal / this.foodPageSize));
       },
+
+      foodClientPageCount() {
+        return Math.max(
+          1,
+          Math.ceil(this.foodClientTotal / this.foodClientPageSize)
+        );
+      },
     },
 
     mounted() {
       window.addEventListener('scroll', this.hideFoodTooltip, true);
       window.addEventListener('resize', this.hideFoodTooltip);
+      window.addEventListener('keydown', this.handleGlobalKeydown);
       this.init();
     },
 
     beforeUnmount() {
       window.removeEventListener('scroll', this.hideFoodTooltip, true);
       window.removeEventListener('resize', this.hideFoodTooltip);
+      window.removeEventListener('keydown', this.handleGlobalKeydown);
       this.stopTimers();
     },
 
@@ -321,6 +352,10 @@
           clearInterval(this.refreshTimer);
           this.refreshTimer = null;
         }
+        if (this.foodClientNoticeTimer) {
+          clearTimeout(this.foodClientNoticeTimer);
+          this.foodClientNoticeTimer = null;
+        }
       },
 
       async apiFetch(url, options = {}) {
@@ -364,7 +399,7 @@
       },
 
       async loadCurrentUser() {
-        const response = await this.apiFetch('/api/auth/me', {
+        const response = await this.apiFetch('api/auth/me', {
           cache: 'no-store',
         });
         if (!response.ok) {
@@ -385,7 +420,7 @@
         this.overviewPermissionDenied = false;
 
         try {
-          const response = await this.apiFetch('/api/status', {
+          const response = await this.apiFetch('api/status', {
             cache: 'no-store',
           });
           if (!response.ok) {
@@ -416,7 +451,7 @@
         this.clientsPermissionDenied = false;
 
         try {
-          const response = await this.apiFetch('/api/clients', {
+          const response = await this.apiFetch('api/clients', {
             cache: 'no-store',
           });
           if (!response.ok) {
@@ -450,7 +485,15 @@
 
         this.refreshing = true;
         try {
-          await Promise.allSettled([this.loadStatus(), this.loadClients()]);
+          const tasks = [this.loadStatus(), this.loadClients()];
+          if (
+            this.activeTab === 'foodClients' &&
+            this.canViewFoodClients &&
+            !this.foodClientDeleteBusy
+          ) {
+            tasks.push(this.loadFoodClients());
+          }
+          await Promise.allSettled(tasks);
         } finally {
           this.refreshing = false;
         }
@@ -475,7 +518,7 @@
             pageIndex: String(this.foodPageIndex),
             pageSize: String(this.foodPageSize),
           });
-          const response = await this.apiFetch(`/api/foods?${params.toString()}`, {
+          const response = await this.apiFetch(`api/foods?${params.toString()}`, {
             cache: 'no-store',
           });
           if (!response.ok) {
@@ -515,8 +558,177 @@
         this.loadFoods();
       },
 
+      async loadFoodClients() {
+        if (!this.canViewFoodClients) {
+          this.foodClientsPermissionDenied = true;
+          return;
+        }
+
+        if (this.foodClientsLoading) {
+          return;
+        }
+
+        this.foodClientsLoading = true;
+        this.foodClientsError = '';
+        this.foodClientsPermissionDenied = false;
+        const previousPageIndex = this.foodClientPageIndex;
+        let shouldReload = false;
+
+        try {
+          const params = new URLSearchParams({
+            pageIndex: String(this.foodClientPageIndex),
+            pageSize: String(this.foodClientPageSize),
+          });
+          const response = await this.apiFetch(
+            `api/foodClients?${params.toString()}`,
+            { cache: 'no-store' }
+          );
+          if (!response.ok) {
+            throw new Error(
+              `food clients request failed: ${response.status}`
+            );
+          }
+
+          const result = await response.json();
+          const data = result?.data || {};
+          this.foodClients = Array.isArray(data.list) ? data.list : [];
+          this.foodClientTotal = Number.isFinite(data.total)
+            ? data.total
+            : this.foodClients.length;
+
+          if (this.foodClientPageIndex >= this.foodClientPageCount) {
+            this.foodClientPageIndex = Math.max(
+              0,
+              this.foodClientPageCount - 1
+            );
+            shouldReload = this.foodClientPageIndex !== previousPageIndex;
+          }
+        } catch (error) {
+          if (error && error.forbidden) {
+            this.foodClients = [];
+            this.foodClientTotal = 0;
+            this.foodClientsPermissionDenied = true;
+          } else if (error && error.message !== 'unauthorized') {
+            this.foodClients = [];
+            this.foodClientTotal = 0;
+            this.foodClientsError = '辅食客户端加载失败，请稍后重试';
+          }
+        } finally {
+          this.foodClientsLoading = false;
+        }
+
+        if (shouldReload) {
+          await this.loadFoodClients();
+        }
+      },
+
+      changeFoodClientPage(delta) {
+        const nextIndex = this.foodClientPageIndex + delta;
+        if (nextIndex < 0 || nextIndex >= this.foodClientPageCount) {
+          return;
+        }
+
+        this.foodClientPageIndex = nextIndex;
+        this.loadFoodClients();
+      },
+
+      openFoodClientDelete(client) {
+        if (!client || this.foodClientDeleteBusy) {
+          return;
+        }
+
+        this.foodClientDeleteTarget = client;
+        this.foodClientDeleteError = '';
+      },
+
+      closeFoodClientDelete() {
+        if (this.foodClientDeleteBusy) {
+          return;
+        }
+
+        this.foodClientDeleteTarget = null;
+        this.foodClientDeleteError = '';
+      },
+
+      async confirmDeleteFoodClient() {
+        const target = this.foodClientDeleteTarget;
+        if (!target || this.foodClientDeleteBusy) {
+          return;
+        }
+
+        this.foodClientDeleteBusy = true;
+        this.foodClientDeleteError = '';
+
+        try {
+          const response = await this.apiFetch(
+            `api/foodClients/${encodeURIComponent(target.chipId)}`,
+            { method: 'DELETE' }
+          );
+
+          if (!response.ok) {
+            let message = '删除失败，请稍后重试';
+            try {
+              const payload = await response.json();
+              if (payload && payload.message) {
+                message = payload.message;
+              }
+            } catch (error) {
+              // Keep the generic message when the body is not JSON.
+            }
+            throw new Error(message);
+          }
+
+          this.foodClientDeleteTarget = null;
+          this.showFoodClientNotice(
+            'success',
+            `已删除辅食客户端 ${target.chipId}`
+          );
+
+          if (this.foodClients.length === 1 && this.foodClientPageIndex > 0) {
+            this.foodClientPageIndex -= 1;
+          }
+          await this.loadFoodClients();
+        } catch (error) {
+          if (error && error.message === 'unauthorized') {
+            return;
+          }
+
+          this.foodClientDeleteError =
+            error && error.forbidden
+              ? '当前账号无权限删除辅食客户端'
+              : (error && error.message) || '删除失败，请稍后重试';
+        } finally {
+          this.foodClientDeleteBusy = false;
+        }
+      },
+
+      showFoodClientNotice(type, text) {
+        this.foodClientNotice = { type, text };
+        if (this.foodClientNoticeTimer) {
+          clearTimeout(this.foodClientNoticeTimer);
+        }
+
+        this.foodClientNoticeTimer = setTimeout(() => {
+          this.foodClientNotice = null;
+          this.foodClientNoticeTimer = null;
+        }, 4000);
+      },
+
+      handleGlobalKeydown(event) {
+        if (event.key !== 'Escape') {
+          return;
+        }
+
+        if (this.foodClientDeleteTarget && !this.foodClientDeleteBusy) {
+          this.closeFoodClientDelete();
+        }
+      },
+
       switchTab(tabName) {
         if (tabName === 'foods' && !this.canViewFoods) {
+          return;
+        }
+        if (tabName === 'foodClients' && !this.canViewFoodClients) {
           return;
         }
 
@@ -525,6 +737,9 @@
 
         if (tabName === 'foods') {
           this.loadFoods();
+        }
+        if (tabName === 'foodClients') {
+          this.loadFoodClients();
         }
       },
 
@@ -582,7 +797,7 @@
 
         try {
           if (token) {
-            await fetch('/api/auth/logout', {
+            await fetch('api/auth/logout', {
               method: 'POST',
               headers: {
                 Authorization: `Bearer ${token}`,

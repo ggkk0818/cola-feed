@@ -102,7 +102,7 @@ The central brain and the only long-running service.
 - **Feed service** — stores records in `data/feed-records.json`, keeps the newest 12, and coalesces rapid presses: a feed within 30 minutes of the last record updates that record's `endTime`/`duration` instead of creating a new one.
 - **Client service** — listens on UDP 6113 for discovery broadcasts, stores known devices in `data/clients.json`, and pushes to each device's `PUT /api/feedData` every 5 minutes (immediately after a feed). If a push fails and the last heartbeat is more than 10 minutes old, the device is marked offline.
 - **Weather service** — polls a QWeather-compatible API (`/v7/weather/now` and `/v7/weather/7d`) once an hour, tolerates compressed responses, and returns `{ now, daily3d, updateTime }`. Without configuration, `weatherData` is sent as `null`.
-- **Web UI** — Chinese two-tab interface: feeding overview with elapsed time and history, plus the discovered client list. Colors follow the OS light/dark preference.
+- **Web UI** — Chinese tabbed interface: feeding overview with elapsed time and history, food records, the discovered feeding-client list, and a food-client list with delete actions. Colors follow the OS light/dark preference. Static assets and API calls use relative paths, so the UI can be served under a reverse-proxy subpath.
 
 **Stack**: Node.js 18+, Express 5, Docker (Node 20 Alpine).
 
@@ -310,7 +310,7 @@ Wi-Fi credentials must be present in NVS under namespace `wifi_cfg` with keys `s
 
 ### 6. Feed the baby
 
-Open the web UI and log in to view feeding records and clients; record a feeding via `POST /api/feed` (the web UI no longer exposes a feed button). The server updates or creates the current record, pushes to all known devices immediately, and the e-paper refreshes within seconds.
+Open the web UI and log in to view feeding records, feeding clients, and food clients; record a feeding via `POST /api/feed` (the web UI no longer exposes a feed button). The server updates or creates the current record, pushes to all known devices immediately, and the e-paper refreshes within seconds.
 
 ## Configuration
 
@@ -459,6 +459,7 @@ The gateway also answers `/generate_204`, `/hotspot-detect.html`, `/connecttest.
 ## Operational Notes
 
 - The bundled web UI is Chinese-only; dates are formatted as `YYYY-MM-DD HH:mm:ss` in the server's local time zone (`TZ`, default `Asia/Shanghai` in Docker).
+- Web assets, API calls, and login redirects all use relative paths, so the UI can be deployed under a reverse-proxy subpath such as `/feed/`. The proxy must strip that prefix (for example `location /feed/ { proxy_pass http://feed-server:3000/; }`) and the browser must use a trailing slash; visiting `/feed` without it makes relative assets resolve one directory up.
 - Weather is entirely optional. Without it, displays show `--`/unknown icons and everything else keeps working.
 - Only the latest 6 records are pushed to devices; the server keeps 12.
 - The BLE link stays up during brief Wi-Fi drops (the gateway retries in the background), but is disabled in provisioning mode. The e-paper keeps showing its last snapshot, with the clock advancing from the last known server time.

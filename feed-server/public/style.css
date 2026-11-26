@@ -504,6 +504,161 @@ tbody tr:last-child td {
   font-variant-numeric: tabular-nums;
 }
 
+.notice {
+  margin: 12px 20px 0;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.notice-success {
+  background: rgb(22 163 74 / 12%);
+  color: #15803d;
+}
+
+.notice-error {
+  background: rgb(185 28 28 / 10%);
+  color: #b91c1c;
+}
+
+.link-btn {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--primary);
+  padding: 4px 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.link-btn:hover:not(:disabled) {
+  background: rgb(15 118 110 / 10%);
+}
+
+.link-btn.danger {
+  color: #dc2626;
+}
+
+.link-btn.danger:hover:not(:disabled) {
+  background: rgb(220 38 38 / 10%);
+}
+
+.link-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.modal-mask {
+  position: fixed;
+  z-index: 3000;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(15 23 42 / 55%);
+}
+
+.modal-card {
+  width: min(420px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  padding: 22px;
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  color: var(--text);
+}
+
+.modal-card h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.modal-card p {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.modal-card strong {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.modal-error {
+  color: #b91c1c !important;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.ghost-btn,
+.danger-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.ghost-btn {
+  border: 1px solid var(--chip-border);
+  background: transparent;
+  color: var(--text);
+}
+
+.ghost-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.danger-btn {
+  border: 1px solid #dc2626;
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.danger-btn:hover:not(:disabled) {
+  border-color: #b91c1c;
+  background: #b91c1c;
+}
+
+.ghost-btn:disabled,
+.danger-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+@media (prefers-color-scheme: dark) {
+  .notice-success {
+    background: rgb(34 197 94 / 14%);
+    color: #86efac;
+  }
+
+  .notice-error {
+    background: rgb(248 113 113 / 12%);
+    color: #fca5a5;
+  }
+
+  .modal-error {
+    color: #fca5a5 !important;
+  }
+
+  .link-btn.danger {
+    color: #fca5a5;
+  }
+
+  .link-btn.danger:hover:not(:disabled) {
+    background: rgb(248 113 113 / 12%);
+  }
+}
+
 @media (max-width: 767px) {
   .foods-table th:first-child,
   .foods-table td:first-child {
@@ -519,5 +674,22 @@ tbody tr:last-child td {
     flex-wrap: wrap;
     gap: 10px;
     padding: 12px;
+  }
+
+  .tabs-nav {
+    flex-wrap: wrap;
+  }
+
+  .tab-btn {
+    flex: 1 1 calc(50% - 4px);
+    min-width: 0;
+  }
+
+  .notice {
+    margin: 10px 12px 0;
+  }
+
+  .modal-card {
+    padding: 18px;
   }
 }
