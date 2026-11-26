@@ -9,5 +9,6 @@ data/users.json
 data/feed-records.json
 data/foods.json
 data/foodTypes.json
+data/foodClients.json
 data/static
 data/.tmp

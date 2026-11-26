@@ -6,10 +6,12 @@ const { WeatherService } = require('./src/services/weatherService');
 const { UserService } = require('./src/services/userService');
 const { AuthService } = require('./src/services/authService');
 const { FoodService } = require('./src/services/foodService');
+const { FoodClientService } = require('./src/services/foodClientService');
 const { loadConfig } = require('./src/config/appConfig');
 const { createAuthRouter } = require('./src/routes/authRoutes');
 const { createApiRouter } = require('./src/routes/apiRoutes');
 const { createFoodRouter } = require('./src/routes/foodRoutes');
+const { createFoodClientRouter } = require('./src/routes/foodClientRoutes');
 
 const app = express();
 const config = loadConfig();
@@ -32,6 +34,11 @@ const clientService = new ClientService({
 const userService = new UserService({ dataDir });
 const authService = new AuthService({ userService });
 const foodService = new FoodService({ dataDir });
+const foodClientService = new FoodClientService({
+  dataDir,
+  foodService,
+  authService,
+});
 
 if (userService.users.length === 0) {
   // eslint-disable-next-line no-console
@@ -43,6 +50,12 @@ if (userService.users.length === 0) {
 app.use(express.json());
 app.use('/api/auth', createAuthRouter({ authService }));
 app.use('/api', createApiRouter({ feedService, clientService, authService }));
+// 辅食客户端路由先于辅食路由挂载，避免后者的 router 级鉴权
+// 先于客户端路由执行。
+app.use(
+  '/api',
+  createFoodClientRouter({ foodClientService, authService })
+);
 app.use('/api', createFoodRouter({ foodService, authService }));
 
 // 辅食图片与 bin 文件保存在数据目录中，容器重建后仍可通过数据卷保留。

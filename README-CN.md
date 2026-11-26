@@ -320,7 +320,7 @@ pio run -t upload
 | --- | --- | --- |
 | `PORT` | `3000` | API 与 Web 界面的 HTTP 端口 |
 | `UDP_PORT` | `6113` | UDP 发现端口（需与固件一致） |
-| `DATA_DIR` | `feed-server/data` | `feed-records.json`、`clients.json` 与 `users.json` 的存放目录 |
+| `DATA_DIR` | `feed-server/data` | 运行时 JSON 的存放目录，包括 `feed-records.json`、`clients.json`、`users.json`、`foods.json`、`foodTypes.json` 与 `foodClients.json` |
 | `WEATHER_API_BASE_URL` | 空 | QWeather 兼容接口地址；为空时关闭天气功能 |
 | `WEATHER_API_KEY` | 空 | 接口密钥 |
 | `WEATHER_LOCATION_ID` | 空 | 地区 ID（也接受 `WEATHER_LOCATION` 作为别名） |
@@ -357,6 +357,10 @@ pio run -t upload
 | `GET` | `/api/foodTypes` | 辅食类型列表，分页与排序规则同上（类型按创建时间倒序）；需要角色 1/4/5 |
 | `POST` | `/api/foodTypes` | 以 multipart/form-data 新增辅食类型：`name`、`coverImageFile`、`coverBinFile`、`coverBinSmallFile` |
 | `DELETE` | `/api/foodTypes/{id}` | 逻辑删除辅食类型 |
+| `POST` | `/api/foodClients/register` | 注册辅食客户端：`{ "chipId", "firmwareVersion" }`，请求头使用 app token；返回一年期客户端 token；需要角色 1/5 |
+| `GET` | `/api/foodClients` | 辅食客户端列表，`pageIndex` 默认 0、`pageSize` 默认 20，可按 `chipId`、`isOnline` 过滤；需要角色 1/5 |
+| `DELETE` | `/api/foodClients/{chipId}` | 逻辑删除辅食客户端并吊销其 token；需要角色 1/5 |
+| `GET` | `/api/foodClients/recentFoods` | 客户端获取最近辅食：`chipId`、`firmwareVersion`；返回 `serverTime` 与当天前后各 7 天共 15 天数据；请求头使用客户端 token，需要角色 1/4/5 |
 
 响应统一使用 `code`/`data`，并附带历史遗留的 `messagge` 字段（注意拼写）。辅食相关接口使用标准的 `message` 字段。示例：
 
@@ -383,7 +387,8 @@ Web 登录页为 `/login.html`。页面先请求 `/api/auth/public-key`，再使
 - `GET /api/status`、`GET /api/clients` 需要请求头 `Authorization: Bearer <token>`，且账号 roles 含管理员类角色 1、3 或 5，否则返回 HTTP 401（`reason` 为 `UNAUTHORIZED` 或 `FORBIDDEN`）。
 - 辅食接口（`/api/foods`、`/api/foodTypes` 的读写）同样需要 `Authorization: Bearer <token>`，允许角色 1、4、5。
 - `POST /api/feed` 保持匿名可用，未登录也可以记录喂奶。
-- token 保存在服务端内存中，默认有效期 7 天，服务重启后全部失效。代码已按登录渠道预留有效期映射，后续扫码登录完成身份校验后可调用 `issueToken(user, { channel: 'qr' })` 获得 365 天有效期。
+- Web 登录 token 保存在服务端内存中，默认有效期 7 天，服务重启后失效。代码已按登录渠道预留有效期映射，后续扫码登录完成身份校验后可调用 `issueToken(user, { channel: 'qr' })` 获得 365 天有效期。
+- 辅食客户端 token 的有效期为一年；服务端只把它的 SHA-256 摘要保存到 `data/foodClients.json`，服务重启时会自动恢复会话。客户端被逻辑删除后 token 立即吊销。
 - 账号保存在 `data/users.json`，角色枚举：1 管理员、2 喂奶用户、3 喂奶管理员、4 辅食用户、5 辅食管理员。
 - 默认账号：`admin`（roles `[1,2,3,4,5]`，密码 `admin`）、`mom`（roles `[2,4]`，密码 `mom`）。上线前请替换默认密码；当前未提供修改密码接口，可生成新的 scrypt 哈希后更新 `data/users.json`。
 - 已有 Docker 数据卷不会自动获得 `users.json`；升级时请将仓库中的 `data/users.json` 复制进数据卷（或重建数据卷），否则没有账号可登录。
@@ -395,6 +400,41 @@ Web 登录页为 `/login.html`。页面先请求 `/api/auth/public-key`，再使
 - 上传的图片与 bin 文件保存在 `data/static/foodimg/年-月/` 下，通过 `/static/foodimg/...` 访问；JSON 中保存的 URL 为不带前导斜杠的 `static/foodimg/...`，便于客户端按服务地址拼接。Docker 部署时该目录位于数据卷内。
 - `POST /api/foodTypes` 的 `name` 长度为 1-20 个字符；图片仅支持 jpg、jpeg、png；三个文件均为必填，单个文件最大 50MB。
 - 删除辅食类型不会删除历史辅食记录：辅食记录中保存了名称与图片 URL 的快照。
+
+### 辅食客户端
+
+- 客户端保存在 `data/foodClients.json`，字段为 `chipId`、`ip`、`firmwareVersion`、`heartbeatTime`、`isOnline`、`isDel`、`createTime`、`createUser`、`updateTime`、`updateUser`；服务初始化时自动读取，新增、心跳更新和逻辑删除后立即写回。
+- 注册接口由 app 端携带 `Authorization: Bearer <app token>` 调用，`createUser` 记录发起注册的 app 用户。注册成功返回的客户端 token 只返回一次，内部仅保存摘要，服务重启后也不会再次返回明文 token。
+- 同一 `chipId` 已有有效记录时注册返回 409；记录已被逻辑删除时会重新启用该记录并签发新 token。
+- `GET /api/foodClients/recentFoods` 由客户端使用注册返回的 token 调用。客户端 token 与 `chipId` 绑定，不匹配返回 403；调用会刷新 `ip`、`firmwareVersion`、`heartbeatTime`、`isOnline`。
+- 返回示例（固定 15 天，无记录的日期也返回空数组）：
+
+```json
+{
+  "code": 200,
+  "data": {
+    "serverTime": "2026-11-26 11:30:00",
+    "foods": [
+      { "date": "2026-11-19", "morningFoods": [], "afternoonFoods": [] },
+      {
+        "date": "2026-11-26",
+        "morningFoods": [
+          {
+            "id": "0123456789abcdef0123456789abcdef",
+            "typeId": "0123456789abcdef0123456789abcdef",
+            "name": "米糊",
+            "coverImageUrl": "static/foodimg/2026-11/a.png",
+            "coverBinUrl": "static/foodimg/2026-11/a.bin",
+            "coverBinSmallUrl": "static/foodimg/2026-11/a.small.bin"
+          }
+        ],
+        "afternoonFoods": []
+      }
+    ]
+  },
+  "message": "成功"
+}
+```
 
 ### 设备 HTTP 接口
 

@@ -2,6 +2,13 @@ function padTwoDigits(value) {
   return String(value).padStart(2, '0');
 }
 
+function formatDate(date) {
+  const year = date.getFullYear();
+  const month = padTwoDigits(date.getMonth() + 1);
+  const day = padTwoDigits(date.getDate());
+  return `${year}-${month}-${day}`;
+}
+
 function formatDateTime(date) {
   const year = date.getFullYear();
   const month = padTwoDigits(date.getMonth() + 1);
@@ -38,6 +45,7 @@ function parseDateTime(value) {
 }
 
 module.exports = {
+  formatDate,
   formatDateTime,
   parseDateTime,
 };

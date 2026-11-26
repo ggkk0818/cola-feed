@@ -320,7 +320,7 @@ Open the web UI and log in to view feeding records and clients; record a feeding
 | --- | --- | --- |
 | `PORT` | `3000` | HTTP port for the API and web UI |
 | `UDP_PORT` | `6113` | UDP discovery port (must match firmware) |
-| `DATA_DIR` | `feed-server/data` | Directory for `feed-records.json`, `clients.json`, and `users.json` |
+| `DATA_DIR` | `feed-server/data` | Directory for runtime JSON, including `feed-records.json`, `clients.json`, `users.json`, `foods.json`, `foodTypes.json`, and `foodClients.json` |
 | `WEATHER_API_BASE_URL` | empty | QWeather-compatible API base URL; weather is disabled when empty |
 | `WEATHER_API_KEY` | empty | API key |
 | `WEATHER_LOCATION_ID` | empty | Location ID (`WEATHER_LOCATION` is accepted as an alias) |
@@ -357,6 +357,10 @@ Open the web UI and log in to view feeding records and clients; record a feeding
 | `GET` | `/api/foodTypes` | Food type list with the same paging (types sorted by creation time descending); roles 1/4/5 |
 | `POST` | `/api/foodTypes` | Add a food type as multipart/form-data: `name`, `coverImageFile`, `coverBinFile`, `coverBinSmallFile` |
 | `DELETE` | `/api/foodTypes/{id}` | Soft-delete a food type |
+| `POST` | `/api/foodClients/register` | Register a food client with `{ "chipId", "firmwareVersion" }` using an app token in the header; returns a one-year client token; roles 1/5 |
+| `GET` | `/api/foodClients` | Food client list; `pageIndex` defaults to 0, `pageSize` to 20, optional `chipId`/`isOnline` filters; roles 1/5 |
+| `DELETE` | `/api/foodClients/{chipId}` | Soft-delete a food client and revoke its token; roles 1/5 |
+| `GET` | `/api/foodClients/recentFoods` | Client reads recent food with `chipId` and `firmwareVersion`; returns `serverTime` plus 15 days (today ±7); client token in the header; roles 1/4/5 |
 
 All responses use `code`/`data`; the server also keeps a legacy `messagge` field (note the spelling). Food endpoints use the correctly spelled `message` field. Example:
 
@@ -383,7 +387,8 @@ The web login page is `/login.html`. It first fetches `/api/auth/public-key`, en
 - `GET /api/status` and `GET /api/clients` require `Authorization: Bearer <token>` and an admin-type role (1, 3, or 5). Otherwise the server returns HTTP 401 with `reason` set to `UNAUTHORIZED` or `FORBIDDEN`.
 - Food endpoints (`/api/foods` and `/api/foodTypes`, both read and write) also require `Authorization: Bearer <token>` and allow roles 1, 4, and 5.
 - `POST /api/feed` stays anonymous so existing LAN callers keep working.
-- Tokens live in server memory and expire after 7 days by default; a restart invalidates them. Per-channel lifetimes are already modeled: after a future QR-code login verifies the user, call `issueToken(user, { channel: 'qr' })` for a 365-day token.
+- Web login tokens live in server memory and expire after 7 days by default; a restart invalidates them. Per-channel lifetimes are already modeled: after a future QR-code login verifies the user, call `issueToken(user, { channel: 'qr' })` for a 365-day token.
+- Food client tokens last one year. Only their SHA-256 digest is stored in `data/foodClients.json`, and sessions are restored automatically on restart. Deleting a client revokes its token immediately.
 - Accounts live in `data/users.json`. Roles: 1 administrator, 2 feed user, 3 feed admin, 4 food user, 5 food admin.
 - Default accounts: `admin` (roles `[1,2,3,4,5]`, password `admin`) and `mom` (roles `[2,4]`, password `mom`). Replace the default passwords before deployment; there is no password-change API yet, so update the scrypt hash in `data/users.json` directly.
 - An existing Docker data volume does not gain `users.json` automatically. When upgrading, copy `data/users.json` into the volume (or recreate the volume), otherwise no account can log in.
@@ -395,6 +400,41 @@ The web login page is `/login.html`. It first fetches `/api/auth/public-key`, en
 - Uploaded images and bin files live in `data/static/foodimg/YYYY-MM/` and are served from `/static/foodimg/...`. JSON stores URLs without a leading slash (`static/foodimg/...`) so clients can join them to the server base URL. In Docker this directory is inside the data volume.
 - `POST /api/foodTypes` accepts a `name` of 1-20 characters; images must be jpg, jpeg, or png; all three files are required and each is limited to 50MB.
 - Deleting a food type does not delete historical food records; each food item keeps a snapshot of the type name and image URLs.
+
+### Food clients
+
+- Clients are stored in `data/foodClients.json` with `chipId`, `ip`, `firmwareVersion`, `heartbeatTime`, `isOnline`, `isDel`, `createTime`, `createUser`, `updateTime`, and `updateUser`. The file is loaded at startup and written after registration, heartbeat updates, and logical deletion.
+- The app calls the register endpoint with `Authorization: Bearer <app token>`; `createUser` records that app user. The returned client token is shown only once; only its digest is persisted, so a restart cannot reveal it again.
+- Registering an active `chipId` returns 409. A logically deleted record is revived with a new token.
+- `GET /api/foodClients/recentFoods` is called with the client token. The token is bound to its `chipId` (mismatch returns 403), and each call refreshes `ip`, `firmwareVersion`, `heartbeatTime`, and `isOnline`.
+- The response always contains 15 days; days without records have empty arrays:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "serverTime": "2026-11-26 11:30:00",
+    "foods": [
+      { "date": "2026-11-19", "morningFoods": [], "afternoonFoods": [] },
+      {
+        "date": "2026-11-26",
+        "morningFoods": [
+          {
+            "id": "0123456789abcdef0123456789abcdef",
+            "typeId": "0123456789abcdef0123456789abcdef",
+            "name": "rice cereal",
+            "coverImageUrl": "static/foodimg/2026-11/a.png",
+            "coverBinUrl": "static/foodimg/2026-11/a.bin",
+            "coverBinSmallUrl": "static/foodimg/2026-11/a.small.bin"
+          }
+        ],
+        "afternoonFoods": []
+      }
+    ]
+  },
+  "message": "成功"
+}
+```
 
 ### Device HTTP endpoints
 

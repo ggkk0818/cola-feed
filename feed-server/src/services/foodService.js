@@ -383,6 +383,18 @@ class FoodService {
     };
   }
 
+  /**
+   * 返回指定日期最新的一条有效辅食记录，供辅食客户端读取最近辅食。
+   * 正常情况下同一天只有一条有效记录；若历史数据存在重复，取最新创建的一条。
+   */
+  getFoodByDate(date) {
+    const matching = this.foods
+      .filter((food) => food.isDel === 0 && food.date === date)
+      .sort((left, right) => right.createTime.localeCompare(left.createTime));
+
+    return matching.length > 0 ? this.toPublicFood(matching[0]) : null;
+  }
+
   normalizeTypeIdList(value, fieldName) {
     if (value === undefined || value === null) {
       return [];

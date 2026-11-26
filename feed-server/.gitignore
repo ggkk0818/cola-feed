@@ -3,6 +3,7 @@ data/clients.json
 data/users.json
 data/foods.json
 data/foodTypes.json
+data/foodClients.json
 data/static/
 data/.tmp/
 .env.dev
